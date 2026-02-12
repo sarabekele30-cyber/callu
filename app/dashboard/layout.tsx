@@ -46,8 +46,16 @@ export default function DashboardLayout({
 
               <div className="border-t border-zinc-800 pt-6">
                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center">
-                          <UserIcon size={20} className="text-zinc-400" />
+                      <div className="w-10 h-10 rounded-full overflow-hidden bg-zinc-800 flex items-center justify-center">
+                          {user.avatarConfig?.image ? (
+                            <img 
+                              src={user.avatarConfig.image} 
+                              alt={user.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-sm font-bold text-white">{user.name[0].toUpperCase()}</span>
+                          )}
                       </div>
                       <div>
                           <p className="font-medium">{user.name}</p>

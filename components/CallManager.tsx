@@ -19,6 +19,16 @@ export default function CallManager() {
   const myVideo = useRef<HTMLVideoElement>(null);
   const userVideo = useRef<HTMLVideoElement>(null);
   const connectionRef = useRef<RTCPeerConnection | null>(null);
+  const incomingRingtone = useRef<HTMLAudioElement | null>(null);
+  const outgoingRingtone = useRef<HTMLAudioElement | null>(null);
+
+  // Initialize audio on mount
+  useEffect(() => {
+    incomingRingtone.current = new Audio("/music/callin.mp3");
+    incomingRingtone.current.loop = true;
+    outgoingRingtone.current = new Audio("/music/ringing.mp3");
+    outgoingRingtone.current.loop = true;
+  }, []);
 
   // Handle Socket Events for Incoming Calls
   useEffect(() => {
@@ -26,12 +36,21 @@ export default function CallManager() {
 
     socket.on("call-made", (data) => {
       setIncomingCall({ from: data.from, name: data.name, avatar: data.avatar, signal: data.signal });
+      // Play incoming ringtone
+      incomingRingtone.current?.play().catch(err => console.log("Audio play failed:", err));
     });
 
     return () => {
       socket.off("call-made");
     };
   }, [socket]);
+
+  // Play outgoing ringtone when making a call
+  useEffect(() => {
+    if (outgoingCallData && !callAccepted) {
+      outgoingRingtone.current?.play().catch(err => console.log("Audio play failed:", err));
+    }
+  }, [outgoingCallData, callAccepted]);
 
   const startCall = async (idToCall: string) => {
     // 1. Get Media - Audio only for voice calls
@@ -81,6 +100,9 @@ export default function CallManager() {
       socket?.on("call-answered", async (data) => {
         if (data.signal.sdp) {
           await peer.setRemoteDescription(new RTCSessionDescription(data.signal.sdp));
+          // Stop outgoing ringtone when call is accepted
+          outgoingRingtone.current?.pause();
+          if (outgoingRingtone.current) outgoingRingtone.current.currentTime = 0;
           setCallAccepted(true);
         }
       });
@@ -100,6 +122,10 @@ export default function CallManager() {
 
   const answerCall = async () => {
     if (!incomingCall) return;
+    
+    // Stop ringtones
+    incomingRingtone.current?.pause();
+    if (incomingRingtone.current) incomingRingtone.current.currentTime = 0;
     
     setCallAccepted(true);
 
@@ -162,6 +188,12 @@ export default function CallManager() {
   }, [outgoingCallData, callAccepted]);
 
   const endCall = () => {
+    // Stop all ringtones
+    incomingRingtone.current?.pause();
+    outgoingRingtone.current?.pause();
+    if (incomingRingtone.current) incomingRingtone.current.currentTime = 0;
+    if (outgoingRingtone.current) outgoingRingtone.current.currentTime = 0;
+    
     connectionRef.current?.close();
     setIncomingCall(null);
     setOutgoingCallData(null);
