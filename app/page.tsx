@@ -1,6 +1,8 @@
 "use client";
 import React, { useState } from "react";
 import ApplyModal, { LoginModal } from "@/components/ApplyModal";
+import StyledButton from "@/components/StyledButton";
+import MemberButton from "@/components/MemberButton";
 import { Mic, Shield, Lock, Zap } from "lucide-react";
 
 export default function Home() {
@@ -20,13 +22,7 @@ export default function Home() {
            <h1 className="text-3xl font-black tracking-tighter text-white">CALLU</h1>
            <div className="w-2 h-2 bg-emerald-500 rounded-full mt-3"></div>
         </div>
-        <button 
-            onClick={() => setShowLogin(true)} 
-            className="group flex items-center gap-2 px-5 py-2.5 rounded-full bg-zinc-900/50 border border-zinc-800 text-sm font-medium text-zinc-400 hover:bg-white hover:text-black hover:border-white transition-all duration-300 cursor-pointer backdrop-blur-md"
-        >
-            <span className="w-2 h-2 rounded-full bg-zinc-600 group-hover:bg-black transition-colors"></span>
-            Member Area
-        </button>
+        <MemberButton onClick={() => setShowLogin(true)} />
       </nav>
 
       <div className="relative z-10 flex flex-col items-center justify-center min-h-[70vh] px-4 text-center w-full max-w-5xl pt-10">
@@ -48,15 +44,7 @@ export default function Home() {
             Connect through voice, video, and serendipity.
         </p>
         
-        <button 
-          onClick={() => setShowApply(true)}
-          className="group relative px-10 py-5 bg-white text-black text-lg font-medium rounded-full overflow-hidden transition-all duration-300 hover:scale-105 hover:shadow-[0_0_60px_-15px_rgba(255,255,255,0.3)] cursor-pointer"
-        >
-            <span className="relative z-10 flex items-center gap-2">
-                Apply to Join Community 
-                <span className="group-hover:translate-x-1 transition-transform">→</span>
-            </span>
-        </button>
+        <StyledButton onClick={() => setShowApply(true)} />
 
         {/* Bento Grid Teaser */}
         <div className="mt-24 grid grid-cols-1 md:grid-cols-6 gap-6 w-full max-w-6xl px-4 pb-24">
