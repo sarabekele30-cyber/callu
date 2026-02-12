@@ -62,11 +62,13 @@ export default function DashboardPage() {
         <div className="flex flex-col items-center justify-center min-h-[500px] w-full bg-zinc-900/40 border border-zinc-800 rounded-3xl backdrop-blur-sm p-12">
           <div className="w-56 h-56 mb-8 bg-zinc-900/50 rounded-full flex items-center justify-center relative">
              <div className="absolute inset-0 bg-zinc-500/5 rounded-full blur-3xl" />
-             <DotLottieReact
-              src="/Lotties/nobody.lottie"
-              loop
-              autoplay
-            />
+             <div className="w-full h-full -translate-y-3 -translate-x-2">
+               <DotLottieReact
+                src="/Lotties/nobody.lottie"
+                loop
+                autoplay
+              />
+             </div>
           </div>
           <div className="text-center space-y-3 max-w-md">
             <h3 className="text-3xl font-light text-white tracking-tight">The Lounge is Empty</h3>

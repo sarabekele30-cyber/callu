@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, DM_Sans, Playfair_Display } from "next/font/google"; // Added fonts
 import { AuthProvider } from "@/context/AuthContext";
+import SmoothScrolling from "@/components/SmoothScrolling";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -41,7 +42,9 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${dmSans.variable} ${playfair.variable} antialiased bg-black text-white`}
       >
         <AuthProvider>
-          {children}
+          <SmoothScrolling>
+            {children}
+          </SmoothScrolling>
         </AuthProvider>
       </body>
     </html>

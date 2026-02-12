@@ -29,3 +29,9 @@ body {
 
 .font-dm { font-family: var(--font-dm-sans); }
 .font-playfair { font-family: var(--font-playfair); }
+
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-stopped { overflow: hidden; }
+.lenis.lenis-scrolling iframe { pointer-events: none; }
