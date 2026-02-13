@@ -167,7 +167,11 @@ export default function CallManager() {
 
       // Handle incoming stream
       peer.ontrack = (event) => {
-        if (userVideo.current) userVideo.current.srcObject = event.streams[0];
+        if (userVideo.current) {
+          userVideo.current.srcObject = event.streams[0];
+          // Explicitly play the remote audio stream
+          userVideo.current.play().catch(err => console.log("Remote audio play failed:", err));
+        }
       };
 
       // Create Offer
@@ -237,7 +241,11 @@ export default function CallManager() {
       };
 
       peer.ontrack = (event) => {
-        if (userVideo.current) userVideo.current.srcObject = event.streams[0];
+        if (userVideo.current) {
+          userVideo.current.srcObject = event.streams[0];
+          // Explicitly play the remote audio stream
+          userVideo.current.play().catch(err => console.log("Remote audio play failed:", err));
+        }
       };
 
       // Set Remote from incoming
