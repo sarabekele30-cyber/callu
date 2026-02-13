@@ -196,6 +196,22 @@ export default function CallManager() {
 
   // ─── Initialize ringtone elements ────────────────────────────
   useEffect(() => {
+    // Check if we're in a secure context (required for camera access)
+    console.log("🔒 Secure context:", window.isSecureContext);
+    console.log("📍 Protocol:", window.location.protocol);
+    console.log("🌐 Hostname:", window.location.hostname);
+    
+    if (!window.isSecureContext && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+      console.warn("⚠️ NOT in secure context! Camera access requires HTTPS (except on localhost)");
+    }
+    
+    // Check if getUserMedia is available
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      console.error("❌ getUserMedia is not available in this browser!");
+    } else {
+      console.log("✅ getUserMedia is available");
+    }
+    
     incomingRingtone.current = new Audio("/music/callin.mp3");
     incomingRingtone.current.loop = true;
     incomingRingtone.current.volume = 1;
@@ -433,31 +449,44 @@ export default function CallManager() {
   // ─── Attach remote stream to video element ───────────────────
   const attachRemoteStream = (event: RTCTrackEvent, role: string) => {
     console.log(`[${role}] Received remote track:`, event.track.kind, event.streams.length);
-    if (!userVideo.current || !event.streams[0]) return;
+    
+    if (!event.streams[0]) {
+      console.error(`[${role}] No stream in track event!`);
+      return;
+    }
+    
+    if (!userVideo.current) {
+      console.error(`[${role}] userVideo ref is null!`);
+      return;
+    }
 
     if (event.track.kind === "video") {
+      console.log(`[${role}] 📹 VIDEO track received! ID: ${event.track.id}, label: ${event.track.label}, enabled: ${event.track.enabled}`);
       setRemoteVideoAvailable(true);
     }
 
-    userVideo.current.srcObject = event.streams[0];
+    // Set stream on video element
+    const remoteStream = event.streams[0];
+    userVideo.current.srcObject = remoteStream;
     userVideo.current.muted = false;
     userVideo.current.volume = 1;
 
-    console.log(`[${role}] Set remote stream, tracks:`,
-      event.streams[0].getTracks().map((t) => `${t.kind} enabled:${t.enabled}`)
+    const tracks = remoteStream.getTracks();
+    console.log(`[${role}] Set remote stream with ${tracks.length} tracks:`,
+      tracks.map((t) => `${t.kind} (${t.label}) enabled:${t.enabled} muted:${t.muted}`)
     );
 
     userVideo.current.play()
       .then(() => {
-        console.log(`✅ [${role}] Remote audio playing (vol: ${userVideo.current!.volume}, muted: ${userVideo.current!.muted})`);
+        console.log(`✅ [${role}] Remote video/audio playing (vol: ${userVideo.current!.volume}, muted: ${userVideo.current!.muted})`);
         setAudioBlocked(false);
       })
       .catch((err) => {
-        console.error(`❌ [${role}] Remote audio blocked:`, err.message);
+        console.error(`❌ [${role}] Remote video/audio playback failed:`, err.message);
         setAudioBlocked(true);
       });
 
-    startSpeakingDetector(event.streams[0], setIsRemoteSpeaking, remoteAnalyserRef, remoteSpeakRaf);
+    startSpeakingDetector(remoteStream, setIsRemoteSpeaking, remoteAnalyserRef, remoteSpeakRaf);
   };
 
   // ─── Set up peer connection state monitors ───────────────────
@@ -501,11 +530,46 @@ export default function CallManager() {
         video: callType === "video" ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false,
         audio: true,
       };
-      const currentStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+      
+      console.log("[CALLER] Requesting media:", mediaConstraints);
+      
+      let currentStream;
+      try {
+        currentStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+      } catch (mediaErr: any) {
+        console.error("[CALLER] getUserMedia failed:", mediaErr);
+        const errorMsg = callType === "video" 
+          ? `Camera access denied or unavailable: ${mediaErr.message}\n\nPlease ensure:\n1. Camera permission is granted\n2. No other app is using the camera\n3. You're on HTTPS (required for camera access)`
+          : `Microphone access denied: ${mediaErr.message}`;
+        alert(errorMsg);
+        endCall();
+        return;
+      }
+      
       setStream(currentStream);
       streamRef.current = currentStream;
-      if (myVideo.current) myVideo.current.srcObject = currentStream;
-      console.log("[CALLER] Got local stream, type:", callType);
+      if (myVideo.current) {
+        myVideo.current.srcObject = currentStream;
+        console.log("[CALLER] Set local video element srcObject");
+      }
+      
+      const videoTracks = currentStream.getVideoTracks();
+      const audioTracks = currentStream.getAudioTracks();
+      console.log(`[CALLER] Got local stream - Video tracks: ${videoTracks.length}, Audio tracks: ${audioTracks.length}`);
+      
+      if (callType === "video" && videoTracks.length === 0) {
+        console.warn("[CALLER] Video call requested but no video track obtained!");
+        alert("Camera not available. Please check your camera permissions and try again.");
+        endCall();
+        return;
+      }
+      
+      videoTracks.forEach(track => {
+        console.log(`[CALLER] Video track: ${track.label}, enabled: ${track.enabled}, muted: ${track.muted}`);
+      });
+      audioTracks.forEach(track => {
+        console.log(`[CALLER] Audio track: ${track.label}, enabled: ${track.enabled}, muted: ${track.muted}`);
+      });
 
       startSpeakingDetector(currentStream, setIsLocalSpeaking, localAnalyserRef, localSpeakRaf);
 
@@ -596,11 +660,46 @@ export default function CallManager() {
         video: callType === "video" ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false,
         audio: true,
       };
-      const currentStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+      
+      console.log("[ANSWERER] Requesting media:", mediaConstraints);
+      
+      let currentStream;
+      try {
+        currentStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+      } catch (mediaErr: any) {
+        console.error("[ANSWERER] getUserMedia failed:", mediaErr);
+        const errorMsg = callType === "video" 
+          ? `Camera access denied or unavailable: ${mediaErr.message}\n\nPlease ensure:\n1. Camera permission is granted\n2. No other app is using the camera\n3. You're on HTTPS (required for camera access)`
+          : `Microphone access denied: ${mediaErr.message}`;
+        alert(errorMsg);
+        endCall();
+        return;
+      }
+      
       setStream(currentStream);
       streamRef.current = currentStream;
-      if (myVideo.current) myVideo.current.srcObject = currentStream;
-      console.log("[ANSWERER] Got local stream, type:", callType);
+      if (myVideo.current) {
+        myVideo.current.srcObject = currentStream;
+        console.log("[ANSWERER] Set local video element srcObject");
+      }
+      
+      const videoTracks = currentStream.getVideoTracks();
+      const audioTracks = currentStream.getAudioTracks();
+      console.log(`[ANSWERER] Got local stream - Video tracks: ${videoTracks.length}, Audio tracks: ${audioTracks.length}`);
+      
+      if (callType === "video" && videoTracks.length === 0) {
+        console.warn("[ANSWERER] Video call requested but no video track obtained!");
+        alert("Camera not available. Please check your camera permissions and try again.");
+        endCall();
+        return;
+      }
+      
+      videoTracks.forEach(track => {
+        console.log(`[ANSWERER] Video track: ${track.label}, enabled: ${track.enabled}, muted: ${track.muted}`);
+      });
+      audioTracks.forEach(track => {
+        console.log(`[ANSWERER] Audio track: ${track.label}, enabled: ${track.enabled}, muted: ${track.muted}`);
+      });
 
       startSpeakingDetector(currentStream, setIsLocalSpeaking, localAnalyserRef, localSpeakRaf);
 
