@@ -21,46 +21,39 @@ export default function CallManager() {
   const connectionRef = useRef<RTCPeerConnection | null>(null);
   const incomingRingtone = useRef<HTMLAudioElement | null>(null);
   const outgoingRingtone = useRef<HTMLAudioElement | null>(null);
+  const mediaPrimed = useRef(false); // Track if media has been primed
 
-  // Initialize audio on mount and prime them for autoplay
-  useEffect(() => {
-    incomingRingtone.current = new Audio("/music/callin.mp3");
-    incomingRingtone.current.loop = true;
-    outgoingRingtone.current = new Audio("/music/ringing.mp3");
-    outgoingRingtone.current.loop = true;
+  // Function to prime all media elements
+  const primeAllMedia = () => {
+    if (mediaPrimed.current) {
+      console.log("⏭️ Media already primed, skipping");
+      return;
+    }
 
-    // Prime audio AND video elements to bypass autoplay policy
-    const primeMedia = () => {
-      // Prime ringtones
-      if (incomingRingtone.current) {
-        incomingRingtone.current.volume = 0.01;
-        incomingRingtone.current.play().then(() => {
-          incomingRingtone.current?.pause();
-          if (incomingRingtone.current) {
-            incomingRingtone.current.currentTime = 0;
-            incomingRingtone.current.volume = 1;
-          }
-          console.log("✅ Incoming ringtone primed successfully");
-        }).catch(() => console.log("⏸️ Incoming ringtone autoplay blocked - will prime on interaction"));
-      }
-      if (outgoingRingtone.current) {
-        outgoingRingtone.current.volume = 0.01;
-        outgoingRingtone.current.play().then(() => {
-          outgoingRingtone.current?.pause();
-          if (outgoingRingtone.current) {
-            outgoingRingtone.current.currentTime = 0;
-            outgoingRingtone.current.volume = 1;
-          }
-          console.log("✅ Outgoing ringtone primed successfully");
-        }).catch(() => console.log("⏸️ Outgoing ringtone autoplay blocked - will prime on interaction"));
-      }
+    console.log("🎯 Priming all media elements...");
 
-      // Prime video elements for WebRTC audio
-      if (userVideo.current) {
-        // Create a silent stream to prime the video element
-        const silentAudioContext = new AudioContext();
-        const oscillator = silentAudioContext.createOscillator();
-        const dst = oscillator.connect(silentAudioContext.createMediaStreamDestination());
+    // Prime ringtones
+    if (incomingRingtone.current && outgoingRingtone.current) {
+      const primeAudio = (audio: HTMLAudioElement, name: string) => {
+        audio.volume = 0.01;
+        audio.play().then(() => {
+          audio.pause();
+          audio.currentTime = 0;
+          audio.volume = 1;
+          console.log(`✅ ${name} primed`);
+        }).catch(() => console.log(`⏸️ ${name} blocked`));
+      };
+
+      primeAudio(incomingRingtone.current, "Incoming ringtone");
+      primeAudio(outgoingRingtone.current, "Outgoing ringtone");
+    }
+
+    // Prime video element for WebRTC
+    if (userVideo.current) {
+      try {
+        const audioContext = new AudioContext();
+        const oscillator = audioContext.createOscillator();
+        const dst = oscillator.connect(audioContext.createMediaStreamDestination());
         oscillator.start();
         const silentStream = (dst as any).stream as MediaStream;
         
@@ -69,38 +62,36 @@ export default function CallManager() {
         userVideo.current.play().then(() => {
           oscillator.stop();
           userVideo.current!.srcObject = null;
-          console.log("✅ Remote video element primed for WebRTC audio");
-        }).catch(() => console.log("⏸️ Remote video autoplay blocked - will prime on interaction"));
+          console.log("✅ WebRTC audio element primed");
+        }).catch(() => console.log("⏸️ WebRTC element blocked"));
+      } catch (e) {
+        console.log("⚠️ AudioContext not available:", e);
       }
-    };
+    }
 
-    // Try to prime immediately (will likely fail on first load without interaction)
-    primeMedia();
+    mediaPrimed.current = true;
+    console.log("🎉 Media priming complete!");
+  };
 
-    // Prime on first user interaction
-    const primeOnInteraction = () => {
-      console.log("🎯 User interaction detected - priming all media");
-      primeMedia();
-    };
+  // Initialize audio on mount
+  useEffect(() => {
+    incomingRingtone.current = new Audio("/music/callin.mp3");
+    incomingRingtone.current.loop = true;
+    outgoingRingtone.current = new Audio("/music/ringing.mp3");
+    outgoingRingtone.current.loop = true;
 
-    // Listen for ANY user interaction
-    const events = ['click', 'touchstart', 'keydown', 'mousedown'];
-    events.forEach(event => {
-      document.addEventListener(event, primeOnInteraction, { once: true });
-    });
-
-    return () => {
-      events.forEach(event => {
-        document.removeEventListener(event, primeOnInteraction);
-      });
-    };
-  }, []); 
+    // Try priming immediately (usually fails but worth trying)
+    primeAllMedia();
+  }, []);
 
   // Handle Socket Events for Incoming Calls
   useEffect(() => {
     if (!socket) return;
 
     socket.on("call-made", (data) => {
+      // Auto-prime media on incoming call
+      primeAllMedia();
+      
       setIncomingCall({ from: data.from, name: data.name, avatar: data.avatar, signal: data.signal });
       setIsInCall(true);
       // Play incoming ringtone
@@ -115,6 +106,9 @@ export default function CallManager() {
   // Play outgoing ringtone when making a call
   useEffect(() => {
     if (outgoingCallData && !callAccepted) {
+      // Auto-prime media when user initiates a call
+      primeAllMedia();
+      
       outgoingRingtone.current?.play().catch(err => console.log("Audio play failed:", err));
     }
   }, [outgoingCallData, callAccepted]);
