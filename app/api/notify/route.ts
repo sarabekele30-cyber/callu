@@ -54,6 +54,7 @@ export async function POST(req: Request) {
 
     const port = Number(SMTP_PORT);
     const secure = SMTP_SECURE === "true" || port === 465;
+    const forceIpv4 = process.env.SMTP_FORCE_IPV4 !== "false";
 
     const transporter = nodemailer.createTransport({
       host: SMTP_HOST,
@@ -63,6 +64,10 @@ export async function POST(req: Request) {
         user: SMTP_USER,
         pass: SMTP_PASS,
       },
+      tls: {
+        servername: SMTP_HOST,
+      },
+      ...(forceIpv4 ? { family: 4 } : {}),
     });
 
     const callerName = callerUser.name || "A member";

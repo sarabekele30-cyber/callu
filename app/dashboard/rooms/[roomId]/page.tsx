@@ -48,7 +48,9 @@ export default function RoomVoiceChatPage() {
   const [isMuted, setIsMuted] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const [peerConnections, setPeerConnections] = useState<Map<string, RTCPeerConnection>>(new Map());
+  const localStreamRef = useRef<MediaStream | null>(null);
+  // Use ref for peer connections to avoid stale closure issues in socket callbacks
+  const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   
   const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
   const audioAnalyzers = useRef<Map<string, AnalyserNode>>(new Map());
@@ -95,7 +97,13 @@ export default function RoomVoiceChatPage() {
     const initializeRoom = async () => {
       await fetchRoomDetails();
       await joinRoomInDB();
-      await setupLocalAudio();
+      const stream = await setupLocalAudio();
+      
+      // Join socket room AFTER we have our audio stream ready
+      // This ensures createPeerConnection has the stream when room-participants arrives
+      if (socket && stream && user) {
+        socket.emit("join-room", { roomId, userId: user._id, userName: user.name, avatar: user.avatarConfig?.image, color: user.avatarConfig?.color });
+      }
     };
     
     initializeRoom();
@@ -158,8 +166,7 @@ export default function RoomVoiceChatPage() {
   useEffect(() => {
     if (!socket || !roomId || !user) return;
 
-    // Join the room via socket
-    socket.emit("join-room", { roomId, userId: user._id, userName: user.name, avatar: user.avatarConfig?.image, color: user.avatarConfig?.color });
+    // Socket join-room is done in initializeRoom after audio setup
 
     // Listen for other participants
     socket.on("room-user-joined", handleUserJoined);
@@ -188,10 +195,8 @@ export default function RoomVoiceChatPage() {
   }, [socket]);
 
   const handleUserSpeaking = (data: { userId: string; isSpeaking: boolean }) => {
-    console.log('Received user-speaking event:', data.userId, data.isSpeaking);
     setParticipants(prev => {
       const updated = prev.map(p => p.userId === data.userId ? { ...p, isSpeaking: data.isSpeaking } : p);
-      console.log('Updated participants:', updated);
       return updated;
     });
   };
@@ -243,12 +248,15 @@ export default function RoomVoiceChatPage() {
         }
       });
       setLocalStream(stream);
+      localStreamRef.current = stream;
       
       // Setup audio analyzer for local stream
       setupLocalAudioAnalyzer(stream);
+      return stream;
     } catch (error) {
       console.error("Failed to get audio stream:", error);
       alert("Please enable microphone access to join voice chat");
+      return null;
     }
   };
 
@@ -380,7 +388,7 @@ export default function RoomVoiceChatPage() {
     
     // Create peer connections for existing participants (excluding self)
     data.participants.forEach((participant) => {
-      if (participant.userId !== user?._id && !peerConnections.has(participant.userId)) {
+      if (participant.userId !== user?._id && !peerConnectionsRef.current.has(participant.userId)) {
         createPeerConnection(participant.userId, true);
       }
     });
@@ -402,10 +410,10 @@ export default function RoomVoiceChatPage() {
     setParticipants((prev) => prev.filter(p => p.userId !== data.userId));
     
     // Clean up peer connection
-    const pc = peerConnections.get(data.userId);
+    const pc = peerConnectionsRef.current.get(data.userId);
     if (pc) {
       pc.close();
-      peerConnections.delete(data.userId);
+      peerConnectionsRef.current.delete(data.userId);
     }
     
     // Remove audio element
@@ -421,7 +429,7 @@ export default function RoomVoiceChatPage() {
 
   // ─── Handle remote ICE candidate (buffer or add) ─────────────
   const handleRemoteIceCandidate = async (fromUserId: string, candidate: RTCIceCandidateInit) => {
-    const pc = peerConnections.get(fromUserId);
+    const pc = peerConnectionsRef.current.get(fromUserId);
     if (pc && pc.remoteDescription) {
       try {
         await pc.addIceCandidate(new RTCIceCandidate(candidate));
@@ -453,7 +461,8 @@ export default function RoomVoiceChatPage() {
   };
 
   const createPeerConnection = async (targetUserId: string, initiator: boolean) => {
-    if (!localStream || !socket) return;
+    const currentStream = localStreamRef.current;
+    if (!currentStream || !socket) return;
 
     const pc = new RTCPeerConnection(ICE_CONFIG);
     
@@ -461,8 +470,8 @@ export default function RoomVoiceChatPage() {
       iceCandidateBuffers.current.set(targetUserId, []);
     }
 
-    localStream.getTracks().forEach((track) => {
-      pc.addTrack(track, localStream);
+    currentStream.getTracks().forEach((track) => {
+      pc.addTrack(track, currentStream);
     });
 
     pc.onconnectionstatechange = () => {
@@ -522,8 +531,7 @@ export default function RoomVoiceChatPage() {
       setupRemoteAudioAnalyzer(remoteStream, targetUserId);
     };
 
-    peerConnections.set(targetUserId, pc);
-    setPeerConnections(new Map(peerConnections));
+    peerConnectionsRef.current.set(targetUserId, pc);
 
     // If initiator, create and send offer
     if (initiator) {
@@ -551,7 +559,7 @@ export default function RoomVoiceChatPage() {
 
     if (!socket) return;
 
-    let pc = peerConnections.get(fromUserId);
+    let pc = peerConnectionsRef.current.get(fromUserId);
 
     if (signal.type === "offer") {
       if (!pc) {
@@ -592,8 +600,9 @@ export default function RoomVoiceChatPage() {
   };
 
   const toggleMute = () => {
-    if (localStream) {
-      localStream.getAudioTracks().forEach((track) => {
+    const currentStream = localStreamRef.current;
+    if (currentStream) {
+      currentStream.getAudioTracks().forEach((track) => {
         track.enabled = !track.enabled;
       });
       setIsMuted(!isMuted);
@@ -633,8 +642,8 @@ export default function RoomVoiceChatPage() {
 
   const cleanupConnections = () => {
     // Close peer connections
-    peerConnections.forEach((pc) => pc.close());
-    setPeerConnections(new Map());
+    peerConnectionsRef.current.forEach((pc) => pc.close());
+    peerConnectionsRef.current.clear();
     
     // Stop all audio analyzers animation frames
     animationFrames.current.forEach((frameId) => {
@@ -664,8 +673,10 @@ export default function RoomVoiceChatPage() {
     audioRefs.current.clear();
 
     // Stop local stream
-    if (localStream) {
-      localStream.getTracks().forEach((track) => track.stop());
+    const currentStream = localStreamRef.current;
+    if (currentStream) {
+      currentStream.getTracks().forEach((track) => track.stop());
+      localStreamRef.current = null;
     }
   };
 
@@ -680,9 +691,6 @@ export default function RoomVoiceChatPage() {
   if (!room) {
     return null;
   }
-
-  // Debug: Log participants state on each render
-  console.log('Rendering with participants:', participants);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 p-8">
