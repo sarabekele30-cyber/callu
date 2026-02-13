@@ -13,6 +13,7 @@ import {
   Radio,
   Plus,
   Volume2,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useSocket } from "@/context/SocketContext";
@@ -145,6 +146,29 @@ export function DashboardSidebar() {
   const handleJoinRoom = async (roomId: string) => {
     // Join via WebSocket - participant management happens in the room page
     router.push(`/dashboard/rooms/${roomId}`);
+  };
+
+  const handleDeleteRoom = async (roomId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!confirm("Are you sure you want to delete this room? This action cannot be undone.")) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/rooms/${roomId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        setRooms((prev) => prev.filter((room) => room._id !== roomId));
+      } else {
+        alert("Failed to delete room");
+      }
+    } catch (error) {
+      console.error("Failed to delete room:", error);
+      alert("Failed to delete room");
+    }
   };
 
   const toggleSidebar = () => setIsCollapsed(!isCollapsed);
@@ -317,23 +341,34 @@ export function DashboardSidebar() {
                                   <div className="text-xs text-zinc-600 p-2">No rooms yet</div>
                                 ) : (
                                   rooms.map((room) => (
-                                    <button
+                                    <div
                                       key={room._id}
-                                      onClick={() => handleJoinRoom(room._id)}
-                                      className={cn(
-                                        "flex items-center gap-2 p-2 rounded-lg transition-all text-xs w-full text-left group",
-                                        "hover:bg-zinc-900/50 text-zinc-500 hover:text-white",
-                                        isRoomActive(room._id) && "bg-zinc-900/50 text-white"
-                                      )}
+                                      className="flex items-center gap-2 group"
                                     >
-                                      <Volume2 className="w-3 h-3 flex-shrink-0" />
-                                      <span className="whitespace-nowrap font-medium truncate flex-1">
-                                        {room.name}
-                                      </span>
-                                      <span className="text-[10px] text-zinc-600 group-hover:text-zinc-400">
-                                        {room.participantsCount ?? 0}/{room.maxParticipants}
-                                      </span>
-                                    </button>
+                                      <button
+                                        onClick={() => handleJoinRoom(room._id)}
+                                        className={cn(
+                                          "flex items-center gap-2 p-2 rounded-lg transition-all text-xs flex-1 text-left",
+                                          "hover:bg-zinc-900/50 text-zinc-500 hover:text-white",
+                                          isRoomActive(room._id) && "bg-zinc-900/50 text-white"
+                                        )}
+                                      >
+                                        <Volume2 className="w-3 h-3 flex-shrink-0" />
+                                        <span className="whitespace-nowrap font-medium truncate flex-1">
+                                          {room.name}
+                                        </span>
+                                        <span className="text-[10px] text-zinc-600 group-hover:text-zinc-400">
+                                          {room.participantsCount ?? 0}/{room.maxParticipants}
+                                        </span>
+                                      </button>
+                                      <button
+                                        onClick={(e) => handleDeleteRoom(room._id, e)}
+                                        className="p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity text-zinc-500 hover:text-red-500 hover:bg-red-500/10"
+                                        title="Delete room"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
                                   ))
                                 )}
                               </motion.div>

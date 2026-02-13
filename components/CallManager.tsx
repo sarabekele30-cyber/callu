@@ -789,7 +789,11 @@ export default function CallManager() {
           // VOICE CALL - Modal style
           <div className="bg-zinc-900 border border-zinc-700 rounded-3xl p-8 w-full max-w-md mx-4 flex flex-col items-center relative shadow-2xl">
             <button
-              onClick={() => setIsMinimized(true)}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsMinimized(true);
+              }}
               className="absolute top-4 right-4 p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
               aria-label="Minimize call"
             >
@@ -863,7 +867,11 @@ export default function CallManager() {
           // VIDEO CALL - Full-screen style
           <div className="fixed inset-0 bg-black flex flex-col items-center justify-between p-6 z-50">
             <button
-              onClick={() => setIsMinimized(true)}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsMinimized(true);
+              }}
               className="absolute top-4 right-4 p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 z-10"
               aria-label="Minimize call"
             >
