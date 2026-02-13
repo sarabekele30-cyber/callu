@@ -29,9 +29,9 @@ export default function CallManager() {
     outgoingRingtone.current = new Audio("/music/ringing.mp3");
     outgoingRingtone.current.loop = true;
 
-    // Prime audio elements to bypass autoplay policy
-    // Play and immediately pause to "unlock" audio for future use
-    const primeAudio = () => {
+    // Prime audio AND video elements to bypass autoplay policy
+    const primeMedia = () => {
+      // Prime ringtones
       if (incomingRingtone.current) {
         incomingRingtone.current.volume = 0.01;
         incomingRingtone.current.play().then(() => {
@@ -40,7 +40,8 @@ export default function CallManager() {
             incomingRingtone.current.currentTime = 0;
             incomingRingtone.current.volume = 1;
           }
-        }).catch(() => {/* Autoplay blocked, will be unlocked on first user interaction */});
+          console.log("✅ Incoming ringtone primed successfully");
+        }).catch(() => console.log("⏸️ Incoming ringtone autoplay blocked - will prime on interaction"));
       }
       if (outgoingRingtone.current) {
         outgoingRingtone.current.volume = 0.01;
@@ -50,33 +51,50 @@ export default function CallManager() {
             outgoingRingtone.current.currentTime = 0;
             outgoingRingtone.current.volume = 1;
           }
-        }).catch(() => {/* Autoplay blocked, will be unlocked on first user interaction */});
+          console.log("✅ Outgoing ringtone primed successfully");
+        }).catch(() => console.log("⏸️ Outgoing ringtone autoplay blocked - will prime on interaction"));
+      }
+
+      // Prime video elements for WebRTC audio
+      if (userVideo.current) {
+        // Create a silent stream to prime the video element
+        const silentAudioContext = new AudioContext();
+        const oscillator = silentAudioContext.createOscillator();
+        const dst = oscillator.connect(silentAudioContext.createMediaStreamDestination());
+        oscillator.start();
+        const silentStream = (dst as any).stream as MediaStream;
+        
+        userVideo.current.srcObject = silentStream;
+        userVideo.current.volume = 1;
+        userVideo.current.play().then(() => {
+          oscillator.stop();
+          userVideo.current!.srcObject = null;
+          console.log("✅ Remote video element primed for WebRTC audio");
+        }).catch(() => console.log("⏸️ Remote video autoplay blocked - will prime on interaction"));
       }
     };
 
-    // Try to prime immediately (might fail if no user interaction yet)
-    primeAudio();
+    // Try to prime immediately (will likely fail on first load without interaction)
+    primeMedia();
 
-    // Also prime on any user interaction
-    const interactionEvents = ['click', 'touchstart', 'keydown'];
+    // Prime on first user interaction
     const primeOnInteraction = () => {
-      primeAudio();
-      // Remove listeners after first interaction
-      interactionEvents.forEach(event => {
-        document.removeEventListener(event, primeOnInteraction);
-      });
+      console.log("🎯 User interaction detected - priming all media");
+      primeMedia();
     };
 
-    interactionEvents.forEach(event => {
+    // Listen for ANY user interaction
+    const events = ['click', 'touchstart', 'keydown', 'mousedown'];
+    events.forEach(event => {
       document.addEventListener(event, primeOnInteraction, { once: true });
     });
 
     return () => {
-      interactionEvents.forEach(event => {
+      events.forEach(event => {
         document.removeEventListener(event, primeOnInteraction);
       });
     };
-  }, []);
+  }, []); 
 
   // Handle Socket Events for Incoming Calls
   useEffect(() => {
@@ -186,11 +204,18 @@ export default function CallManager() {
         console.log("[CALLER] Received remote track:", event.track.kind, event.streams.length);
         if (userVideo.current && event.streams[0]) {
           userVideo.current.srcObject = event.streams[0];
-          console.log("[CALLER] Set remote stream, tracks:", event.streams[0].getTracks().map(t => t.kind));
+          userVideo.current.volume = 1; // Ensure volume is set
+          console.log("[CALLER] Set remote stream, tracks:", event.streams[0].getTracks().map(t => `${t.kind} enabled:${t.enabled}`));
           // Explicitly play
           userVideo.current.play().then(() => {
-            console.log("[CALLER] Remote audio playing successfully");
-          }).catch(err => console.error("[CALLER] Remote audio play failed:", err));
+            console.log("✅ [CALLER] Remote audio playing - volume:", userVideo.current!.volume);
+          }).catch(err => {
+            console.error("❌ [CALLER] Remote audio play failed:", err);
+            // Try again after a brief delay
+            setTimeout(() => {
+              userVideo.current?.play().catch(e => console.error("❌ [CALLER] Retry failed:", e));
+            }, 100);
+          });
         }
       };
 
@@ -289,11 +314,18 @@ export default function CallManager() {
         console.log("[ANSWERER] Received remote track:", event.track.kind, event.streams.length);
         if (userVideo.current && event.streams[0]) {
           userVideo.current.srcObject = event.streams[0];
-          console.log("[ANSWERER] Set remote stream, tracks:", event.streams[0].getTracks().map(t => t.kind));
+          userVideo.current.volume = 1; // Ensure volume is set
+          console.log("[ANSWERER] Set remote stream, tracks:", event.streams[0].getTracks().map(t => `${t.kind} enabled:${t.enabled}`));
           // Explicitly play
           userVideo.current.play().then(() => {
-            console.log("[ANSWERER] Remote audio playing successfully");
-          }).catch(err => console.error("[ANSWERER] Remote audio play failed:", err));
+            console.log("✅ [ANSWERER] Remote audio playing - volume:", userVideo.current!.volume);
+          }).catch(err => {
+            console.error("❌ [ANSWERER] Remote audio play failed:", err);
+            // Try again after a brief delay
+            setTimeout(() => {
+              userVideo.current?.play().catch(e => console.error("❌ [ANSWERER] Retry failed:", e));
+            }, 100);
+          });
         }
       };
 
