@@ -9,7 +9,7 @@ import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 export default function CallManager() {
   const { user } = useAuth();
   const { socket } = useSocket();
-  const { outgoingCallData, setOutgoingCallData } = useCall();
+  const { outgoingCallData, setOutgoingCallData, setIsInCall } = useCall();
   
   const [incomingCall, setIncomingCall] = useState<{ from: string; name: string; avatar?: string; signal: RTCSessionDescriptionInit } | null>(null);
   const [callAccepted, setCallAccepted] = useState(false);
@@ -36,6 +36,7 @@ export default function CallManager() {
 
     socket.on("call-made", (data) => {
       setIncomingCall({ from: data.from, name: data.name, avatar: data.avatar, signal: data.signal });
+      setIsInCall(true);
       // Play incoming ringtone
       incomingRingtone.current?.play().catch(err => console.log("Audio play failed:", err));
     });
@@ -43,7 +44,7 @@ export default function CallManager() {
     return () => {
       socket.off("call-made");
     };
-  }, [socket]);
+  }, [socket, setIsInCall]);
 
   // Play outgoing ringtone when making a call
   useEffect(() => {
@@ -60,12 +61,34 @@ export default function CallManager() {
     if (incomingRingtone.current) incomingRingtone.current.currentTime = 0;
     if (outgoingRingtone.current) outgoingRingtone.current.currentTime = 0;
     
-    connectionRef.current?.close();
+    // Close peer connection
+    if (connectionRef.current) {
+      connectionRef.current.close();
+      connectionRef.current = null;
+    }
+    
+    // Stop all media tracks
+    if (stream) {
+      stream.getTracks().forEach(track => {
+        track.stop();
+      });
+      setStream(null);
+    }
+    
+    // Clear video elements
+    if (myVideo.current) myVideo.current.srcObject = null;
+    if (userVideo.current) userVideo.current.srcObject = null;
+    
+    // Reset state
     setIncomingCall(null);
     setOutgoingCallData(null);
     setCallAccepted(false);
-    stream?.getTracks().forEach(t => t.stop());
-    window.location.reload(); // Simplest cleanup for WebRTC state
+    setIsInCall(false);
+    setIsMicOn(true);
+    
+    // Remove socket listeners
+    socket?.off("call-answered");
+    socket?.off("signal-received");
   };
 
   const startCall = async (idToCall: string) => {
