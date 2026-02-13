@@ -1,31 +1,138 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   LogOut, 
   LayoutDashboard, 
   PhoneCall, 
-  Wallet, 
   Settings, 
-  ChevronLeft, 
+  ChevronLeft,
+  ChevronDown,
+  Users,
+  Radio,
+  Plus,
+  Volume2,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { usePathname, useRouter } from "next/navigation";
+
+interface Room {
+  _id: string;
+  name: string;
+  description: string;
+  participants: any[];
+  maxParticipants: number;
+}
 
 const navItems = [
-  { icon: LayoutDashboard, label: "Community", href: "/dashboard" },
+  { 
+    icon: LayoutDashboard, 
+    label: "Community", 
+    children: [
+      { icon: Users, label: "Members", href: "/dashboard/members" },
+    ]
+  },
   { icon: PhoneCall, label: "Calls", href: "/dashboard/calls" },
-  { icon: Wallet, label: "Wallet", href: "/dashboard/wallet" },
   { icon: Settings, label: "Settings", href: "/dashboard/settings" },
 ];
 
 export function DashboardSidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [expandedItems, setExpandedItems] = useState<string[]>(["Community"]);
+  const [expandedRooms, setExpandedRooms] = useState(false);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    maxParticipants: 10,
+    roomType: "public" as "public" | "private",
+  });
   const { user, logout } = useAuth();
+  const pathname = usePathname();
+  const router = useRouter();
+
+  useEffect(() => {
+    fetchRooms();
+    
+    // Refresh rooms list every 5 seconds to show updated participant counts
+    const interval = setInterval(fetchRooms, 5000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchRooms = async () => {
+    try {
+      const response = await fetch("/api/rooms");
+      const data = await response.json();
+      if (response.ok && data.rooms) {
+        setRooms(data.rooms);
+      }
+    } catch (error) {
+      console.error("Failed to fetch rooms:", error);
+    }
+  };
+
+  const handleCreateRoom = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreating(true);
+
+    try {
+      const response = await fetch("/api/rooms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...formData,
+          createdBy: user?._id,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok && data.room) {
+        setRooms([data.room, ...rooms]);
+        setShowCreateRoomModal(false);
+        setFormData({
+          name: "",
+          description: "",
+          maxParticipants: 10,
+          roomType: "public",
+        });
+      } else {
+        alert(data.message || "Failed to create room");
+      }
+    } catch (error) {
+      console.error("Failed to create room:", error);
+      alert("Failed to create room");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleJoinRoom = async (roomId: string) => {
+    // Join via WebSocket - participant management happens in the room page
+    router.push(`/dashboard/rooms/${roomId}`);
+  };
 
   const toggleSidebar = () => setIsCollapsed(!isCollapsed);
+  
+  const toggleExpand = (label: string) => {
+    setExpandedItems(prev => 
+      prev.includes(label) ? prev.filter(item => item !== label) : [...prev, label]
+    );
+  };
+
+  const isActive = (href?: string) => {
+    if (!href) return false;
+    return pathname === href || pathname?.startsWith(href + "/");
+  };
+
+  const isRoomActive = (roomId: string) => {
+    return pathname === `/dashboard/rooms/${roomId}`;
+  };
 
   return (
     <motion.aside
@@ -69,32 +176,263 @@ export function DashboardSidebar() {
         {/* Navigation */}
         <nav className={cn("space-y-2 w-full transition-all", isCollapsed ? "mt-8" : "")}>
           {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 p-3 rounded-xl transition-all group",
-                "hover:bg-zinc-900/50 text-zinc-400 hover:text-white",
-                isCollapsed ? "justify-center" : ""
+            <div key={item.label}>
+              {/* Parent Item */}
+              {item.children ? (
+                <button
+                  onClick={() => !isCollapsed && toggleExpand(item.label)}
+                  className={cn(
+                    "flex items-center gap-3 p-3 rounded-xl transition-all group w-full",
+                    "hover:bg-zinc-900/50 text-zinc-400 hover:text-white",
+                    isCollapsed ? "justify-center" : "justify-between"
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <item.icon className="w-5 h-5 flex-shrink-0" />
+                    <AnimatePresence mode="popLayout">
+                      {!isCollapsed && (
+                        <motion.span
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -10 }}
+                          className="whitespace-nowrap font-medium text-sm"
+                        >
+                          {item.label}
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                  {!isCollapsed && (
+                    <ChevronDown 
+                      className={cn(
+                        "w-4 h-4 transition-transform flex-shrink-0",
+                        expandedItems.includes(item.label) && "rotate-180"
+                      )} 
+                    />
+                  )}
+                </button>
+              ) : (
+                <Link
+                  href={item.href!}
+                  className={cn(
+                    "flex items-center gap-3 p-3 rounded-xl transition-all group",
+                    "hover:bg-zinc-900/50 text-zinc-400 hover:text-white",
+                    isActive(item.href) && "bg-zinc-900/50 text-white",
+                    isCollapsed ? "justify-center" : ""
+                  )}
+                >
+                  <item.icon className="w-5 h-5 flex-shrink-0" />
+                  <AnimatePresence mode="popLayout">
+                    {!isCollapsed && (
+                      <motion.span
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        className="whitespace-nowrap font-medium text-sm"
+                      >
+                        {item.label}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </Link>
               )}
-            >
-              <item.icon className="w-5 h-5 flex-shrink-0" />
-              <AnimatePresence mode="popLayout">
-                {!isCollapsed && (
-                  <motion.span
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -10 }}
-                    className="whitespace-nowrap font-medium text-sm"
-                  >
-                    {item.label}
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </Link>
+
+              {/* Child Items */}
+              {item.children && !isCollapsed && (
+                <AnimatePresence>
+                  {expandedItems.includes(item.label) && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="ml-4 mt-1 space-y-1 border-l border-zinc-800 pl-4">
+                        {/* Rooms Section */}
+                        <div>
+                          <div className="flex items-center justify-between p-2.5 rounded-lg hover:bg-zinc-900/50 text-zinc-500 hover:text-white transition-all">
+                            <button
+                              onClick={() => setExpandedRooms(!expandedRooms)}
+                              className="flex items-center gap-3 text-sm flex-1"
+                            >
+                              <Radio className="w-4 h-4 flex-shrink-0" />
+                              <span className="whitespace-nowrap font-medium">Rooms</span>
+                              <ChevronDown 
+                                className={cn(
+                                  "w-3 h-3 transition-transform flex-shrink-0",
+                                  expandedRooms && "rotate-180"
+                                )} 
+                              />
+                            </button>
+                            <button
+                              onClick={() => setShowCreateRoomModal(true)}
+                              className="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white transition-all"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
+                          </div>
+
+                          {/* Room List */}
+                          <AnimatePresence>
+                            {expandedRooms && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="overflow-hidden ml-4 mt-1 space-y-1"
+                              >
+                                {rooms.length === 0 ? (
+                                  <div className="text-xs text-zinc-600 p-2">No rooms yet</div>
+                                ) : (
+                                  rooms.map((room) => (
+                                    <button
+                                      key={room._id}
+                                      onClick={() => handleJoinRoom(room._id)}
+                                      className={cn(
+                                        "flex items-center gap-2 p-2 rounded-lg transition-all text-xs w-full text-left group",
+                                        "hover:bg-zinc-900/50 text-zinc-500 hover:text-white",
+                                        isRoomActive(room._id) && "bg-zinc-900/50 text-white"
+                                      )}
+                                    >
+                                      <Volume2 className="w-3 h-3 flex-shrink-0" />
+                                      <span className="whitespace-nowrap font-medium truncate flex-1">
+                                        {room.name}
+                                      </span>
+                                      <span className="text-[10px] text-zinc-600 group-hover:text-zinc-400">
+                                        {room.participants.length}/{room.maxParticipants}
+                                      </span>
+                                    </button>
+                                  ))
+                                )}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+
+                        {/* Other Children (Members, etc.) */}
+                        {item.children.map((child) => (
+                          <Link
+                            key={child.href}
+                            href={child.href}
+                            className={cn(
+                              "flex items-center gap-3 p-2.5 rounded-lg transition-all text-sm",
+                              "hover:bg-zinc-900/50 text-zinc-500 hover:text-white",
+                              isActive(child.href) && "bg-zinc-900/50 text-white"
+                            )}
+                          >
+                            <child.icon className="w-4 h-4 flex-shrink-0" />
+                            <span className="whitespace-nowrap font-medium">{child.label}</span>
+                          </Link>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              )}
+            </div>
           ))}
         </nav>
       </div>
+
+      {/* Create Room Modal */}
+      {showCreateRoomModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 max-w-md w-full">
+            <h2 className="text-2xl font-bold text-white mb-6">
+              Create New Room
+            </h2>
+            <form onSubmit={handleCreateRoom} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">
+                  Room Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-zinc-600"
+                  placeholder="My Awesome Room"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">
+                  Description
+                </label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
+                  className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-zinc-600 resize-none"
+                  placeholder="What's this room about?"
+                  rows={3}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">
+                  Max Participants
+                </label>
+                <input
+                  type="number"
+                  min={2}
+                  max={50}
+                  value={formData.maxParticipants}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      maxParticipants: parseInt(e.target.value),
+                    })
+                  }
+                  className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-zinc-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">
+                  Room Type
+                </label>
+                <select
+                  value={formData.roomType}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      roomType: e.target.value as "public" | "private",
+                    })
+                  }
+                  className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-zinc-600"
+                >
+                  <option value="public">Public</option>
+                  <option value="private">Private</option>
+                </select>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateRoomModal(false)}
+                  className="flex-1 px-4 py-2 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creating}
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-zinc-800 to-zinc-950 text-white rounded-lg hover:from-zinc-700 hover:to-zinc-900 transition-colors disabled:opacity-50"
+                >
+                  {creating ? "Creating..." : "Create Room"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <div className={cn("border-t border-zinc-900 mt-auto", isCollapsed ? "p-4" : "p-6")}>
         {user && (

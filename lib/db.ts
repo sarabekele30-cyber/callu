@@ -1,4 +1,6 @@
 import mongoose from 'mongoose';
+import User from '@/models/User';
+import Room from '@/models/Room';
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
