@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useSocket } from "@/context/SocketContext";
 import { useCall } from "@/context/CallContext";
-import { Bell, Mic } from "lucide-react";
+import { Bell, Mic, Video } from "lucide-react";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 
 interface User {
@@ -135,13 +135,22 @@ export default function MembersPage() {
 
                 <div className="space-y-3">
                   {isOnline(member._id) ? (
-                    <button
-                      onClick={() => callUser(member._id, member.name, member.avatarConfig?.image)}
-                      className="w-full bg-white text-black hover:bg-zinc-200 py-4 rounded-2xl font-medium flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shadow-lg shadow-white/5"
-                      title="Start Voice Call"
-                    >
-                      <Mic size={20} /> <span className="tracking-wide">Call Now</span>
-                    </button>
+                    <>
+                      <button
+                        onClick={() => callUser(member._id, member.name, member.avatarConfig?.image, "voice")}
+                        className="w-full bg-white text-black hover:bg-zinc-200 py-3 rounded-2xl font-medium flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shadow-lg shadow-white/5"
+                        title="Start Voice Call"
+                      >
+                        <Mic size={18} /> <span className="tracking-wide">Voice Call</span>
+                      </button>
+                      <button
+                        onClick={() => callUser(member._id, member.name, member.avatarConfig?.image, "video")}
+                        className="w-full bg-blue-600 text-white hover:bg-blue-700 py-3 rounded-2xl font-medium flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shadow-lg shadow-blue-500/20"
+                        title="Start Video Call"
+                      >
+                        <Video size={18} /> <span className="tracking-wide">Video Call</span>
+                      </button>
+                    </>
                   ) : (
                     <button
                       onClick={() => handleNotify(member._id)}
