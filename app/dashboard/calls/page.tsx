@@ -28,13 +28,9 @@ export default function CallsPage() {
     // Fetch call logs from API
     const fetchCallLogs = async () => {
       try {
-        // TODO: Implement API endpoint for call logs
-        // const res = await fetch(`/api/calls/logs`);
-        // const data = await res.json();
-        // setCallLogs(data.logs);
-        
-        // Mock data for now
-        setCallLogs([]);
+        const res = await fetch(`/api/calls/logs?userId=${user?._id}`);
+        const data = await res.json();
+        setCallLogs(data.logs || []);
       } catch (err) {
         console.error("Failed to fetch call logs:", err);
       } finally {

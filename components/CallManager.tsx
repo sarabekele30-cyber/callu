@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSocket } from "@/context/SocketContext";
 import { useAuth } from "@/context/AuthContext";
 import { useCall } from "@/context/CallContext";
-import { Phone, PhoneOff, Mic, MicOff } from "lucide-react";
+import { Phone, PhoneOff, Mic, MicOff, Minimize2, Maximize2 } from "lucide-react";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 
 // ICE server config shared by both caller and answerer
@@ -52,6 +52,7 @@ export default function CallManager() {
   const [ringtoneMuted, setRingtoneMuted] = useState(false);
   const [isLocalSpeaking, setIsLocalSpeaking] = useState(false);
   const [isRemoteSpeaking, setIsRemoteSpeaking] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
 
   const myVideo = useRef<HTMLVideoElement>(null);
   const userVideo = useRef<HTMLVideoElement>(null);
@@ -63,6 +64,8 @@ export default function CallManager() {
   const remoteAnalyserRef = useRef<AnalyserNode | null>(null);
   const localSpeakRaf = useRef<number | null>(null);
   const remoteSpeakRaf = useRef<number | null>(null);
+  const callStartRef = useRef<number | null>(null);
+  const callLoggedRef = useRef(false);
 
   // ICE candidate buffer - stores candidates that arrive before peer is ready
   const iceCandidateBuffer = useRef<RTCIceCandidateInit[]>([]);
@@ -212,6 +215,11 @@ export default function CallManager() {
 
   // ─── Local cleanup (no socket emit) ──────────────────────────
   const endCallLocally = () => {
+    const shouldLog = callAccepted && !!callStartRef.current;
+    if (shouldLog) {
+      void logCall("completed");
+    }
+
     stopRingtone(incomingRingtone.current);
     stopRingtone(outgoingRingtone.current);
 
@@ -239,6 +247,7 @@ export default function CallManager() {
     setAudioBlocked(false);
     setIsLocalSpeaking(false);
     setIsRemoteSpeaking(false);
+    setIsMinimized(false);
 
     if (localSpeakRaf.current) cancelAnimationFrame(localSpeakRaf.current);
     if (remoteSpeakRaf.current) cancelAnimationFrame(remoteSpeakRaf.current);
@@ -252,6 +261,34 @@ export default function CallManager() {
     }
 
     socket?.off("call-answered");
+  };
+
+  const logCall = async (status: "completed" | "missed" | "rejected") => {
+    if (callLoggedRef.current) return;
+    if (!callStartRef.current) return;
+    const ownerId = user?._id;
+    const otherUserId = outgoingCallData ? outgoingCallData.userId : incomingCall?.from;
+    const type = outgoingCallData ? "outgoing" : "incoming";
+    if (!ownerId || !otherUserId) return;
+
+    const duration = Math.max(0, Math.floor((Date.now() - callStartRef.current) / 1000));
+    callLoggedRef.current = true;
+
+    try {
+      await fetch("/api/calls/logs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ownerId,
+          otherUserId,
+          type,
+          duration,
+          status,
+        }),
+      });
+    } catch (error) {
+      console.error("Failed to log call:", error);
+    }
   };
 
   const cancelOutgoingAttempt = () => {
@@ -374,6 +411,19 @@ export default function CallManager() {
       stopRingtone(outgoingRingtone.current);
     }
   }, [outgoingCallData, callAccepted]);
+
+  useEffect(() => {
+    if (incomingCall || outgoingCallData) {
+      callStartRef.current = null;
+      callLoggedRef.current = false;
+    }
+  }, [incomingCall, outgoingCallData]);
+
+  useEffect(() => {
+    if (callAccepted && !callStartRef.current) {
+      callStartRef.current = Date.now();
+    }
+  }, [callAccepted]);
 
   // ─── Attach remote stream to video element ───────────────────
   const attachRemoteStream = (event: RTCTrackEvent, role: string) => {
@@ -628,6 +678,53 @@ export default function CallManager() {
   // ─── RENDER ──────────────────────────────────────────────────
   if (!incomingCall && !outgoingCallData) return null;
 
+  if (isMinimized && callAccepted) {
+    const displayName = incomingCall?.name || outgoingCallData?.userName || "Call";
+    return (
+      <div className="fixed bottom-6 right-6 z-50 bg-zinc-900/90 border border-zinc-700 rounded-2xl px-4 py-3 shadow-2xl flex items-center gap-3" onClick={enableAudio}>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsMinimized(false);
+          }}
+          className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
+          aria-label="Restore call"
+        >
+          <Maximize2 size={16} />
+        </button>
+        <div className="flex flex-col">
+          <span className="text-sm font-medium text-white truncate max-w-[140px]">{displayName}</span>
+          <div className="flex items-center gap-2 text-xs text-zinc-400">
+            <span className={`w-2 h-2 rounded-full ${isRemoteSpeaking ? "bg-emerald-500" : "bg-zinc-600"}`} />
+            <span>In call</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 ml-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleMic();
+            }}
+            className={`p-2 rounded-lg ${!isMicOn ? "bg-red-500 text-white" : "bg-zinc-800 text-zinc-200"}`}
+            aria-label="Toggle mic"
+          >
+            {isMicOn ? <Mic size={16} /> : <MicOff size={16} />}
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              endCall();
+            }}
+            className="p-2 rounded-lg bg-red-600 text-white"
+            aria-label="End call"
+          >
+            <PhoneOff size={16} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md" onClick={enableAudio}>
       <div className="bg-zinc-900 border border-zinc-700 rounded-3xl p-8 w-full max-w-md mx-4 flex flex-col items-center relative shadow-2xl">
@@ -715,7 +812,14 @@ export default function CallManager() {
 
         {/* Audio Call Connected View */}
         {callAccepted && (
-          <div className="flex flex-col items-center py-8 w-full">
+          <div className="flex flex-col items-center py-8 w-full relative">
+            <button
+              onClick={() => setIsMinimized(true)}
+              className="absolute top-0 right-0 p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
+              aria-label="Minimize call"
+            >
+              <Minimize2 size={16} />
+            </button>
             <div className="w-48 h-48 mb-2">
               <DotLottieReact src="/Lotties/love.lottie" loop autoplay />
             </div>

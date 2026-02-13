@@ -73,7 +73,7 @@ export async function POST(req: Request) {
     const callerName = callerUser.name || "A member";
     const callerAvatar = callerUser.avatarConfig?.image || "";
 
-    await transporter.sendMail({
+    const mailOptions = {
       from: SMTP_FROM,
       to: targetUser.email,
       subject: `${callerName} is trying to reach you on CALLU`,
@@ -163,11 +163,44 @@ export async function POST(req: Request) {
         </body>
         </html>
       `,
-    });
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+    } catch (error: any) {
+      const retryOnStartTls = port !== 587;
+      if (!retryOnStartTls) {
+        throw error;
+      }
+
+      const fallback = nodemailer.createTransport({
+        host: SMTP_HOST,
+        port: 587,
+        secure: false,
+        auth: {
+          user: SMTP_USER,
+          pass: SMTP_PASS,
+        },
+        requireTLS: true,
+        tls: {
+          servername: SMTP_HOST,
+        },
+        ...(forceIpv4 ? { family: 4 } : {}),
+      });
+
+      await fallback.sendMail(mailOptions);
+    }
 
     return NextResponse.json({ message: "Notification sent" }, { status: 200 });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Notify error:", error);
-    return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json(
+      {
+        message: "Email send failed",
+        code: error?.code || "UNKNOWN",
+        command: error?.command || "UNKNOWN",
+      },
+      { status: 500 }
+    );
   }
 }
