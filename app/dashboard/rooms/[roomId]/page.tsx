@@ -386,10 +386,10 @@ export default function RoomVoiceChatPage() {
     
     setParticipants(allParticipants);
     
-    // Create peer connections for existing participants (excluding self)
+    // New user: create answerer connections for existing participants
     data.participants.forEach((participant) => {
       if (participant.userId !== user?._id && !peerConnectionsRef.current.has(participant.userId)) {
-        createPeerConnection(participant.userId, true);
+        createPeerConnection(participant.userId, false);
       }
     });
   };
@@ -400,7 +400,7 @@ export default function RoomVoiceChatPage() {
       return [...prev, { userId: data.userId, name: data.userName, avatar: data.avatar, color: data.color, isSpeaking: false }];
     });
 
-    // Create peer connection for new user (initiator)
+    // Existing users: initiate offer to the newly joined user
     if (data.userId !== user?._id) {
       createPeerConnection(data.userId, true);
     }
@@ -463,6 +463,9 @@ export default function RoomVoiceChatPage() {
   const createPeerConnection = async (targetUserId: string, initiator: boolean) => {
     const currentStream = localStreamRef.current;
     if (!currentStream || !socket) return;
+
+    const existing = peerConnectionsRef.current.get(targetUserId);
+    if (existing) return existing;
 
     const pc = new RTCPeerConnection(ICE_CONFIG);
     
@@ -536,6 +539,9 @@ export default function RoomVoiceChatPage() {
     // If initiator, create and send offer
     if (initiator) {
       try {
+        if (pc.signalingState !== "stable") {
+          return pc;
+        }
         const offer = await pc.createOffer({
           offerToReceiveAudio: true,
           offerToReceiveVideo: false,
@@ -568,6 +574,9 @@ export default function RoomVoiceChatPage() {
       
       if (pc) {
         try {
+          if (pc.signalingState !== "stable") {
+            return;
+          }
           await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
           
           await flushIceCandidates(fromUserId, pc);
@@ -587,6 +596,9 @@ export default function RoomVoiceChatPage() {
     } else if (signal.type === "answer") {
       if (pc) {
         try {
+          if (pc.signalingState !== "have-local-offer") {
+            return;
+          }
           await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
           
           await flushIceCandidates(fromUserId, pc);
