@@ -288,12 +288,9 @@ export default function RoomVoiceChatPage() {
     };
     const handleScreenShare = (data: { userId: string; isSharing: boolean }) => {
       setParticipants(prev => prev.map(p => p.userId === data.userId ? { ...p, isScreenSharing: data.isSharing } : p));
-      // Auto-spotlight on screen sharer
-      if (data.isSharing) {
-        setLayout('spotlight');
-        setSpotlightUserId(data.userId);
-      } else if (spotlightUserId === data.userId) {
-        setSpotlightUserId(null);
+      // Clear spotlight if sharer stopped sharing
+      if (!data.isSharing) {
+        setSpotlightUserId(prev => prev === data.userId ? null : prev);
       }
     };
 
@@ -321,6 +318,21 @@ export default function RoomVoiceChatPage() {
       socket.off("room-signal", handleSignal);
     };
   }, [socket]);
+
+  // ─── Synchronize local video stream with video element after render ─────
+  // This is needed because toggleCamera/toggleScreenShare sets the stream ref
+  // BEFORE setting isVideoOn state, so the video element doesn't exist yet
+  // when srcObject is first assigned. This effect runs after re-render.
+  useEffect(() => {
+    const el = localVideoElRef.current;
+    const stream = localVideoStreamRef.current;
+    if (el && stream) {
+      if (el.srcObject !== stream) {
+        el.srcObject = stream;
+        el.play().catch(() => {});
+      }
+    }
+  }, [isVideoOn, isScreenSharing, layout]);
 
   const handleUserSpeaking = (data: { userId: string; isSpeaking: boolean }) => {
     setParticipants(prev => {
@@ -616,16 +628,15 @@ export default function RoomVoiceChatPage() {
       pc.addTrack(track, currentStream);
     });
 
-    // Video capability: initiator adds transceiver or video track
-    if (initiator) {
-      const localVideoTrack = localVideoTrackRef.current;
-      if (localVideoTrack && localVideoStreamRef.current) {
-        // We already have a video track (camera or screen share)
-        pc.addTrack(localVideoTrack, localVideoStreamRef.current);
-      } else {
-        // No video yet — add transceiver so video m= line exists in SDP
-        pc.addTransceiver('video', { direction: 'sendrecv' });
-      }
+    // Video capability: BOTH sides need a video transceiver for video to work
+    // Without this on both sides, the answerer can't send video back
+    const localVideoTrack = localVideoTrackRef.current;
+    if (localVideoTrack && localVideoStreamRef.current) {
+      // We already have a video track (camera or screen share)
+      pc.addTrack(localVideoTrack, localVideoStreamRef.current);
+    } else {
+      // No video yet — add transceiver so video m= line exists in SDP
+      pc.addTransceiver('video', { direction: 'sendrecv' });
     }
 
     pc.onconnectionstatechange = () => {
@@ -655,7 +666,8 @@ export default function RoomVoiceChatPage() {
 
     // Handle remote tracks (audio + video)
     pc.ontrack = (event) => {
-      const remoteStream = event.streams[0];
+      // event.streams[0] can be empty when addTransceiver was used without a stream
+      const remoteStream = event.streams[0] || new MediaStream([event.track]);
 
       if (event.track.kind === 'audio') {
         // Audio: create/update audio element
@@ -1033,10 +1045,6 @@ export default function RoomVoiceChatPage() {
           socket.emit("room-screen-share", { roomId, userId: user?._id, isSharing: true });
         }
 
-        // Auto-switch to spotlight
-        setLayout('spotlight');
-        setSpotlightUserId(user?._id || null);
-
         // Listen for native "Stop sharing" button
         screenTrack.onended = () => {
           void stopScreenShare();
@@ -1183,14 +1191,6 @@ export default function RoomVoiceChatPage() {
           </div>
           
           <div className="hidden sm:flex items-center gap-3">
-            <button
-              onClick={() => setLayout(l => l === 'grid' ? 'spotlight' : 'grid')}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900/50 border border-zinc-800 rounded-full hover:bg-zinc-800/50 transition-colors cursor-pointer"
-              title={layout === 'grid' ? 'Switch to Spotlight' : 'Switch to Grid'}
-            >
-              {layout === 'grid' ? <LayoutGrid className="w-3.5 h-3.5 text-zinc-400" /> : <Maximize2 className="w-3.5 h-3.5 text-zinc-400" />}
-              <span className="text-xs font-medium text-zinc-400 capitalize">{layout}</span>
-            </button>
             <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900/50 border border-zinc-800 rounded-full">
               <div className="flex -space-x-2">
                 {participants.slice(0, 3).map((p, i) => (
