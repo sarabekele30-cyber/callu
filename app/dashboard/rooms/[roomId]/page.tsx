@@ -1075,7 +1075,7 @@ export default function RoomVoiceChatPage() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 w-52 bg-zinc-900/95 backdrop-blur-xl border border-zinc-800/50 rounded-2xl p-2 shadow-2xl ring-1 ring-white/5"
+                    className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 w-52 bg-zinc-900/95 backdrop-blur-xl border border-zinc-800/50 rounded-2xl p-2 shadow-2xl ring-1 ring-white/5 z-[60]"
                   >
                     <button
                       onClick={() => {
@@ -1118,13 +1118,6 @@ export default function RoomVoiceChatPage() {
         </div>
       </div>
 
-      {/* Music Player Panel */}
-      <RoomMusicPlayer
-        roomId={roomId}
-        isOpen={isMusicOpen}
-        onClose={() => setIsMusicOpen(false)}
-      />
-
       {/* Close tools menu on click outside */}
       {showToolsMenu && (
         <div
@@ -1132,6 +1125,13 @@ export default function RoomVoiceChatPage() {
           onClick={() => setShowToolsMenu(false)}
         />
       )}
+
+      {/* Music Player Panel */}
+      <RoomMusicPlayer
+        roomId={roomId}
+        isOpen={isMusicOpen}
+        onClose={() => setIsMusicOpen(false)}
+      />
 
       <style jsx global>{`
         @keyframes music-bar {
