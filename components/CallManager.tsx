@@ -970,10 +970,23 @@ export default function CallManager() {
     }
 
     // ─── Restore original mic track (undo audio mixing) ─────────
-    if (isShareAudioActive && originalMicTrackRef.current && peer) {
+    // Always attempt to restore — use ref directly to avoid stale closure
+    const savedMicTrack = originalMicTrackRef.current;
+    if (peer) {
       const audioSender = peer.getSenders().find((s) => s.track?.kind === "audio");
       if (audioSender) {
-        await audioSender.replaceTrack(originalMicTrackRef.current);
+        if (savedMicTrack && savedMicTrack.readyState === "live") {
+          // Restore the saved original mic track
+          await audioSender.replaceTrack(savedMicTrack);
+          console.log("🎤 Restored original mic track");
+        } else {
+          // Fallback: grab mic track from the current local stream
+          const fallbackMicTrack = streamRef.current?.getAudioTracks()[0] || null;
+          if (fallbackMicTrack && fallbackMicTrack.readyState === "live") {
+            await audioSender.replaceTrack(fallbackMicTrack);
+            console.log("🎤 Restored mic track from local stream (fallback)");
+          }
+        }
       }
     }
     originalMicTrackRef.current = null;
