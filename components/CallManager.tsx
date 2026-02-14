@@ -489,18 +489,13 @@ export default function CallManager() {
       console.error(`[${role}] No stream in track event!`);
       return;
     }
-    
-    if (!userVideo.current) {
-      console.error(`[${role}] userVideo ref is null!`);
-      return;
-    }
 
     if (event.track.kind === "video") {
       console.log(`[${role}] 📹 VIDEO track received! ID: ${event.track.id}, label: ${event.track.label}, enabled: ${event.track.enabled}`);
       setRemoteVideoAvailable(true);
     }
 
-    // Set stream on video element (muted — audio goes through the persistent <audio> element)
+    // Always store stream in ref first — the re-apply effect will handle the rest
     const remoteStream = event.streams[0];
     remoteStreamRef.current = remoteStream;
 
@@ -511,6 +506,8 @@ export default function CallManager() {
       userVideo.current.play()
         .then(() => console.log(`✅ [${role}] Remote video element playing (muted for video-only)`))
         .catch((err) => console.error(`❌ [${role}] Remote video play failed:`, err.message));
+    } else {
+      console.warn(`[${role}] userVideo ref is null — stream stored in ref, will be applied by effect`);
     }
 
     const tracks = remoteStream.getTracks();
@@ -957,6 +954,28 @@ export default function CallManager() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [outgoingCallData, incomingCall]);
 
+  // ─── Re-apply video streams after React re-renders ───────────
+  // When React conditional branches swap, video elements are destroyed and
+  // re-created, losing their srcObject. This effect re-applies them.
+  useEffect(() => {
+    if (myVideo.current && streamRef.current) {
+      if (myVideo.current.srcObject !== streamRef.current) {
+        myVideo.current.srcObject = streamRef.current;
+        console.log("🔄 Re-applied local stream to myVideo element");
+      }
+    }
+    if (userVideo.current && remoteStreamRef.current) {
+      if (userVideo.current.srcObject !== remoteStreamRef.current) {
+        userVideo.current.srcObject = remoteStreamRef.current;
+        userVideo.current.muted = true;
+        userVideo.current.volume = 0;
+        userVideo.current.play()
+          .then(() => console.log("🔄 Re-applied remote stream to userVideo element"))
+          .catch(() => {});
+      }
+    }
+  });
+
   // ─── RENDER ──────────────────────────────────────────────────
   if (!incomingCall && !outgoingCallData) return null;
 
@@ -975,15 +994,13 @@ export default function CallManager() {
         )}
         
         {/* Local video overlay in corner */}
-        {isVideoOn && (
-          <video
-            playsInline
-            muted
-            ref={myVideo}
-            autoPlay
-            className="absolute bottom-1 right-1 w-16 h-16 rounded-lg object-cover border border-zinc-600"
-          />
-        )}
+        <video
+          playsInline
+          muted
+          ref={myVideo}
+          autoPlay
+          className={`absolute bottom-1 right-1 w-16 h-16 rounded-lg object-cover border border-zinc-600 ${isVideoOn ? '' : 'hidden'}`}
+        />
 
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex flex-col justify-between p-2">
           <div className="text-xs font-medium text-white truncate">{displayName}</div>
@@ -1207,11 +1224,6 @@ export default function CallManager() {
               </div>
             </div>
 
-            {/* Hidden audio/video elements */}
-            <div className="hidden">
-              <video playsInline muted ref={myVideo} autoPlay />
-              <video playsInline ref={userVideo} autoPlay controls={false} />
-            </div>
           </div>
         ) : (
           // VIDEO CALL - Full-screen style
@@ -1239,15 +1251,13 @@ export default function CallManager() {
               />
 
               {/* Local video (picture-in-picture) */}
-              {isVideoOn && (
-                <video
-                  playsInline
-                  muted
-                  ref={myVideo}
-                  autoPlay
-                  className="absolute bottom-4 right-4 w-32 h-40 object-cover rounded-lg border-2 border-zinc-700 shadow-lg"
-                />
-              )}
+              <video
+                playsInline
+                muted
+                ref={myVideo}
+                autoPlay
+                className={`absolute bottom-4 right-4 w-32 h-40 object-cover rounded-lg border-2 border-zinc-700 shadow-lg z-10 ${isVideoOn ? '' : 'hidden'}`}
+              />
 
               {/* Fallback if no remote video */}
               {!remoteVideoAvailable && (
@@ -1432,11 +1442,6 @@ export default function CallManager() {
               </div>
             </div>
 
-            {/* Hidden audio/video elements */}
-            <div className="hidden">
-              <video playsInline muted ref={myVideo} autoPlay />
-              <video playsInline ref={userVideo} autoPlay controls={false} />
-            </div>
           </div>
         )
       ) : (
@@ -1528,12 +1533,7 @@ export default function CallManager() {
           </div>
         )}
 
-        {/* Hidden audio/video elements */}
-        <div className="hidden">
-          <video playsInline muted ref={myVideo} autoPlay />
-          <video playsInline ref={userVideo} autoPlay controls={false} />
-        </div>
-        </div>
+</div>
       )}
     </div>
   );
