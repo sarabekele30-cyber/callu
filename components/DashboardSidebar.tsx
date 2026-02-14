@@ -402,102 +402,151 @@ export function DashboardSidebar() {
       </div>
 
       {/* Create Room Modal */}
-      {showCreateRoomModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 max-w-md w-full">
-            <h2 className="text-2xl font-bold text-white mb-6">
-              Create New Room
-            </h2>
-            <form onSubmit={handleCreateRoom} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-2">
-                  Room Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-zinc-600"
-                  placeholder="My Awesome Room"
-                />
-              </div>
+      <AnimatePresence>
+        {showCreateRoomModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: "spring", duration: 0.5, bounce: 0.3 }}
+              className="bg-zinc-900 border border-zinc-800/50 rounded-3xl p-8 max-w-md w-full shadow-2xl relative overflow-hidden"
+            >
+              {/* Decorative gradient blob */}
+              <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+              
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-8">
+                  <h2 className="text-2xl font-bold text-white tracking-tight">
+                    Create New Room
+                  </h2>
+                  <button 
+                    onClick={() => setShowCreateRoomModal(false)}
+                    className="p-2 bg-zinc-800/50 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-colors border border-transparent hover:border-zinc-700/50"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                
+                <form onSubmit={handleCreateRoom} className="space-y-5">
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                      Room Name
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.name}
+                      onChange={(e) =>
+                        setFormData({ ...formData, name: e.target.value })
+                      }
+                      className="w-full px-4 py-3 bg-zinc-950/50 border border-zinc-800 rounded-xl text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all font-medium"
+                      placeholder="e.g. Chill Vibes Only 🎧"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-2">
-                  Description
-                </label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
-                  className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-zinc-600 resize-none"
-                  placeholder="What's this room about?"
-                  rows={3}
-                />
-              </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                      Description <span className="text-zinc-600 font-normal lowercase ml-1">(Optional)</span>
+                    </label>
+                    <textarea
+                      value={formData.description}
+                      onChange={(e) =>
+                        setFormData({ ...formData, description: e.target.value })
+                      }
+                      className="w-full px-4 py-3 bg-zinc-950/50 border border-zinc-800 rounded-xl text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all resize-none min-h-[100px]"
+                      placeholder="What's this room about?"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-2">
-                  Max Participants
-                </label>
-                <input
-                  type="number"
-                  min={2}
-                  max={50}
-                  value={formData.maxParticipants}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      maxParticipants: parseInt(e.target.value),
-                    })
-                  }
-                  className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-zinc-600"
-                />
-              </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                        Max Participants
+                      </label>
+                      <div className="relative">
+                        <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                        <input
+                          type="number"
+                          min={2}
+                          max={50}
+                          value={formData.maxParticipants}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              maxParticipants: parseInt(e.target.value),
+                            })
+                          }
+                          className="w-full pl-10 pr-4 py-3 bg-zinc-950/50 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+                        />
+                      </div>
+                    </div>
 
-              <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-2">
-                  Room Type
-                </label>
-                <select
-                  value={formData.roomType}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      roomType: e.target.value as "public" | "private",
-                    })
-                  }
-                  className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-zinc-600"
-                >
-                  <option value="public">Public</option>
-                  <option value="private">Private</option>
-                </select>
-              </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                        Privacy
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                          <ChevronDown className="w-4 h-4 text-zinc-500" />
+                        </div>
+                        <select
+                          value={formData.roomType}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              roomType: e.target.value as "public" | "private",
+                            })
+                          }
+                          className="w-full px-4 py-3 bg-zinc-950/50 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all appearance-none cursor-pointer"
+                        >
+                          <option value="public">Public</option>
+                          <option value="private">Private</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
 
-              <div className="flex gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateRoomModal(false)}
-                  className="flex-1 px-4 py-2 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-zinc-800 to-zinc-950 text-white rounded-lg hover:from-zinc-700 hover:to-zinc-900 transition-colors disabled:opacity-50 cursor-pointer"
-                >
-                  {creating ? "Creating..." : "Create Room"}
-                </button>
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateRoomModal(false)}
+                      className="flex-1 px-4 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl transition-all font-medium border border-transparent hover:border-zinc-600"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={creating}
+                      className="flex-1 px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-900/20 hover:shadow-emerald-900/40 relative overflow-hidden group"
+                    >
+                      <span className="relative z-10 flex items-center justify-center gap-2">
+                        {creating ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Creating...
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-4 h-4 transition-transform group-hover:rotate-90" />
+                            Create Room
+                          </>
+                        )}
+                      </span>
+                      <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    </button>
+                  </div>
+                </form>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className={cn("border-t border-zinc-900 mt-auto", isCollapsed ? "p-4" : "p-6")}>
         {user && (

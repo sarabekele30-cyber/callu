@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter, useParams } from "next/navigation";
 import { Volume2, VolumeX, PhoneOff, Users as UsersIcon, Mic, MicOff } from "lucide-react";
@@ -705,30 +706,52 @@ export default function RoomVoiceChatPage() {
   }
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 p-8 font-dm overflow-hidden">
-      <div className="room-ambient" aria-hidden="true"></div>
-      <div className="relative max-w-7xl mx-auto">
+    <div className="relative min-h-screen bg-zinc-950 p-6 md:p-8 font-dm overflow-hidden flex flex-col">
+      {/* Dynamic Background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-[128px] mix-blend-screen" />
+        <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-emerald-900/10 rounded-full blur-[128px] mix-blend-screen" />
+      </div>
+
+      <div className="relative z-10 w-full max-w-7xl mx-auto flex-1 flex flex-col">
         {/* Room Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <Volume2 className="w-8 h-8 text-emerald-500" />
-            <h1 className="text-4xl font-bold text-white">{room.name}</h1>
+        <header className="flex items-start justify-between mb-8 sm:mb-12">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                <Volume2 className="w-5 h-5 text-emerald-500" />
+              </div>
+              <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">{room.name}</h1>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] uppercase font-bold tracking-wider">
+                Live
+              </span>
+            </div>
+            {room.description && (
+              <p className="text-zinc-400 text-sm max-w-md leading-relaxed ml-1">{room.description}</p>
+            )}
           </div>
-          {room.description && (
-            <p className="text-zinc-400 ml-11">{room.description}</p>
-          )}
-        </div>
+          
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-zinc-900/50 border border-zinc-800 rounded-full">
+            <div className="flex -space-x-2">
+              {participants.slice(0, 3).map((p, i) => (
+                <div key={i} className="w-6 h-6 rounded-full border-2 border-zinc-900 overflow-hidden bg-zinc-800">
+                  {p.avatar && <img src={p.avatar} alt="" className="w-full h-full object-cover" />}
+                </div>
+              ))}
+            </div>
+            <span className="text-xs font-semibold text-zinc-400 pl-1">
+              {participants.length} / {room.maxParticipants}
+            </span>
+          </div>
+        </header>
 
         {/* Participants Grid */}
         <div 
-          className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 mb-8" 
+          className="flex-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6 content-start pb-24"
           onClick={() => {
-            // Resume AudioContext on user interaction (browser requirement)
             if (audioContext.current && audioContext.current.state === 'suspended') {
               audioContext.current.resume();
             }
-            
-            // Unmute audio elements (browser autoplay policy)
             audioRefs.current.forEach((audio) => {
               if (audio.muted) {
                 audio.muted = false;
@@ -737,109 +760,145 @@ export default function RoomVoiceChatPage() {
             });
           }}
         >
-          {participants.map((participant) => (
-            <div
-              key={participant.userId}
-              className="group relative rounded-3xl border border-zinc-800/80 bg-zinc-900/70 p-6 flex flex-col items-center justify-center transition-all shadow-[0_12px_32px_rgba(0,0,0,0.35)] hover:border-zinc-700/80 hover:shadow-[0_16px_44px_rgba(0,0,0,0.45)] room-card-float"
-            >
-              {/* Speaking Indicator Pulse */}
-              {participant.isSpeaking && (
-                <>
-                  <div className="absolute inset-0 rounded-2xl border-2 border-emerald-500/50" style={{animation: 'none'}}></div>
-                  <div className="absolute inset-0 rounded-2xl bg-emerald-500/5" style={{animation: 'none'}}></div>
-                </>
-              )}
-              
-              <div className="relative">
-                <div
-                  className="w-24 h-24 rounded-full mb-4 flex items-center justify-center overflow-hidden transition-all relative ring-1 ring-zinc-800/80"
-                  style={{
-                    backgroundColor: participant.color || "#27272a",
-                    boxShadow: participant.isSpeaking 
-                      ? `0 0 12px #10b98166`
-                      : 'none',
-                  }}
-                >
-                  {participant.avatar ? (
-                    <img
-                      src={participant.avatar}
-                      alt={participant.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-3xl font-bold text-white">
-                      {participant.name?.[0]?.toUpperCase() || "U"}
-                    </span>
+          <AnimatePresence mode="popLayout">
+            {participants.map((participant) => (
+              <motion.div
+                layout
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                key={participant.userId}
+                className="group relative aspect-[3/4] rounded-3xl bg-zinc-900/40 backdrop-blur-sm border border-zinc-800/50 overflow-hidden flex flex-col items-center justify-center p-4 transition-all hover:bg-zinc-800/40 hover:border-zinc-700/50 hover:shadow-xl hover:shadow-black/20"
+              >
+                {/* Speaking Highlight */}
+                {participant.isSpeaking && (
+                  <div className="absolute inset-0 rounded-3xl border-2 border-emerald-500/50 shadow-[inset_0_0_20px_rgba(16,185,129,0.2)] transition-all duration-300" />
+                )}
+
+                <div className="relative mb-4">
+                  <div className="relative z-10 w-20 h-20 md:w-24 md:h-24 rounded-full p-1 bg-gradient-to-b from-zinc-700 to-zinc-800 shadow-lg">
+                    <div 
+                      className="w-full h-full rounded-full overflow-hidden bg-zinc-900 flex items-center justify-center text-white"
+                      style={{ backgroundColor: participant.color || "#27272a" }}
+                    >
+                      {participant.avatar ? (
+                        <img
+                          src={participant.avatar}
+                          alt={participant.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-2xl font-bold opacity-80">
+                          {participant.name?.[0]?.toUpperCase() || "U"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Status Indicator */}
+                  {participant.isSpeaking && (
+                     <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-500 rounded-full border-4 border-zinc-900 flex items-center justify-center z-20 animate-pulse">
+                        <Mic className="w-3 h-3 text-emerald-950" />
+                     </div>
                   )}
                 </div>
-                
-              </div>
 
-              <div className="flex flex-col items-center gap-1">
-                <p className="text-white font-semibold text-center truncate max-w-full tracking-tight">
-                  {participant.name}
-                </p>
-                {participant.userId === user?._id && (
-                  <span className="text-[11px] uppercase tracking-widest text-emerald-400">You</span>
-                )}
-                {/* Soundwave Animation */}
-                {participant.isSpeaking && (
-                  <div className="mt-1 flex items-center gap-0.5">
-                    <div className="w-0.5 bg-emerald-500 rounded-full" style={{ height: '3px', animation: 'soundwave 0.6s ease-in-out infinite', animationDelay: '0s' }}></div>
-                    <div className="w-0.5 bg-emerald-500 rounded-full" style={{ height: '5px', animation: 'soundwave 0.6s ease-in-out infinite', animationDelay: '0.1s' }}></div>
-                    <div className="w-0.5 bg-emerald-500 rounded-full" style={{ height: '7px', animation: 'soundwave 0.6s ease-in-out infinite', animationDelay: '0.2s' }}></div>
-                    <div className="w-0.5 bg-emerald-500 rounded-full" style={{ height: '5px', animation: 'soundwave 0.6s ease-in-out infinite', animationDelay: '0.3s' }}></div>
-                    <div className="w-0.5 bg-emerald-500 rounded-full" style={{ height: '3px', animation: 'soundwave 0.6s ease-in-out infinite', animationDelay: '0.4s' }}></div>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
+                <div className="text-center w-full relative z-10 px-2 space-y-1">
+                  <h3 className="text-white font-semibold truncate text-sm md:text-base tracking-tight">
+                    {participant.name}
+                  </h3>
+                  
+                  {participant.userId === user?._id && (
+                    <div className="inline-block px-2 py-0.5 rounded-full bg-zinc-800/80 border border-zinc-700 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                      You
+                    </div>
+                  )}
+
+                  {/* Audio Visualizer (Fake) */}
+                  {participant.isSpeaking && (
+                    <div className="flex items-center justify-center gap-0.5 h-3 mt-2">
+                       {[...Array(5)].map((_, i) => (
+                          <div 
+                            key={i}
+                            className="w-1 bg-emerald-500 rounded-full animate-music-bar"
+                            style={{ 
+                              animationDelay: `${i * 0.1}s`,
+                              height: '100%' 
+                            }} 
+                          />
+                       ))}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
 
-        {/* Voice Controls */}
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-zinc-900 border border-zinc-800 rounded-2xl p-4 shadow-2xl">
-          <div className="flex items-center gap-4">
+        {/* Floating Controls */}
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 w-full max-w-fit px-4">
+          <div className="bg-zinc-900/90 backdrop-blur-xl border border-zinc-800/50 p-2 rounded-2xl shadow-2xl flex items-center gap-2 md:gap-3 ring-1 ring-white/5">
             <button
               onClick={toggleMute}
-              className={`p-4 rounded-xl transition-all cursor-pointer ${
+              data-tooltip="Toggle Mute"
+              className={`p-3.5 md:p-4 rounded-xl transition-all duration-200 group relative ${
                 isMuted
-                  ? "bg-red-600 hover:bg-red-700 text-white"
-                  : "bg-zinc-800 hover:bg-zinc-700 text-white"
+                  ? "bg-red-500/10 text-red-500 hover:bg-red-500/20"
+                  : "bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700 hover:text-white"
               }`}
             >
-              {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+              {isMuted ? <MicOff className="w-5 h-5 md:w-6 md:h-6" /> : <Mic className="w-5 h-5 md:w-6 md:h-6" />}
+              <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-zinc-950 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-zinc-800">
+                {isMuted ? "Unmute" : "Mute"}
+              </span>
             </button>
 
             <button
               onClick={toggleDeafen}
-              className={`p-4 rounded-xl transition-all cursor-pointer ${
+              className={`p-3.5 md:p-4 rounded-xl transition-all duration-200 group relative ${
                 isDeafened
-                  ? "bg-red-600 hover:bg-red-700 text-white"
-                  : "bg-zinc-800 hover:bg-zinc-700 text-white"
+                  ? "bg-red-500/10 text-red-500 hover:bg-red-500/20"
+                  : "bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700 hover:text-white"
               }`}
             >
-              {isDeafened ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
+              {isDeafened ? <VolumeX className="w-5 h-5 md:w-6 md:h-6" /> : <Volume2 className="w-5 h-5 md:w-6 md:h-6" />}
+              <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-zinc-950 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-zinc-800">
+                {isDeafened ? "Undeafen" : "Deafen"}
+              </span>
             </button>
 
-            <div className="w-px h-10 bg-zinc-800 mx-2" />
+            <div className="w-px h-8 bg-zinc-800 mx-1 md:mx-2" />
 
             <button
               onClick={leaveRoom}
-              className="p-4 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-all cursor-pointer"
+              className="p-3.5 md:p-4 rounded-xl bg-red-600 hover:bg-red-500 text-white transition-all shadow-lg shadow-red-900/20 group relative"
             >
-              <PhoneOff className="w-6 h-6" />
-            </button>
-
-            <div className="flex items-center gap-2 ml-4 px-4 py-2 bg-zinc-800 rounded-lg">
-              <UsersIcon className="w-5 h-5 text-zinc-400" />
-              <span className="text-white font-medium">
-                {participants.length}/{room.maxParticipants}
+              <PhoneOff className="w-5 h-5 md:w-6 md:h-6" />
+              <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-zinc-950 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-zinc-800">
+                Leave Room
               </span>
+            </button>
+            
+            <div className="sm:hidden w-px h-8 bg-zinc-800 mx-1" />
+            
+            <div className="sm:hidden flex items-center justify-center w-10 h-10 rounded-xl bg-zinc-800/50 border border-zinc-700/50">
+               <span className="text-xs font-bold text-zinc-400">{participants.length}</span>
             </div>
           </div>
         </div>
       </div>
+
+      <style jsx global>{`
+        @keyframes music-bar {
+          0%, 100% { transform: scaleY(0.5); opacity: 0.5; }
+          50% { transform: scaleY(1); opacity: 1; }
+        }
+        .animate-music-bar {
+          animation: music-bar 0.5s ease-in-out infinite alternate;
+        }
+      `}</style>
     </div>
   );
 }
+
