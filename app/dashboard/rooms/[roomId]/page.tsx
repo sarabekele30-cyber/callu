@@ -79,7 +79,7 @@ export default function RoomVoiceChatPage() {
   const cameraTrackRef = useRef<MediaStreamTrack | null>(null);
   const remoteVideoStreamsRef = useRef<Map<string, MediaStream>>(new Map());
   const videoElementsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
-  const localVideoElRef = useRef<HTMLVideoElement>(null);
+  const localVideoElRef = useRef<HTMLVideoElement | null>(null);
   const mixingCtxRef = useRef<AudioContext | null>(null);
   const originalMicTrackRef = useRef<MediaStreamTrack | null>(null);
 
@@ -320,10 +320,20 @@ export default function RoomVoiceChatPage() {
     };
   }, [socket]);
 
-  // ─── Synchronize local video stream with video element after render ─────
-  // This is needed because toggleCamera/toggleScreenShare sets the stream ref
-  // BEFORE setting isVideoOn state, so the video element doesn't exist yet
-  // when srcObject is first assigned. This effect runs after re-render.
+  // ─── Callback ref for local video — ensures srcObject is always in sync ─────
+  // Since the local user's video element can change between spotlight and strip,
+  // we use a callback ref that re-attaches the stream whenever React mounts a new element.
+  const attachLocalVideoRef = useCallback((el: HTMLVideoElement | null) => {
+    localVideoElRef.current = el;
+    if (el && localVideoStreamRef.current) {
+      if (el.srcObject !== localVideoStreamRef.current) {
+        el.srcObject = localVideoStreamRef.current;
+        el.play().catch(() => {});
+      }
+    }
+  }, []);
+
+  // Also re-sync when video/screen/layout/spotlight state changes
   useEffect(() => {
     const el = localVideoElRef.current;
     const stream = localVideoStreamRef.current;
@@ -333,7 +343,7 @@ export default function RoomVoiceChatPage() {
         el.play().catch(() => {});
       }
     }
-  }, [isVideoOn, isScreenSharing, layout]);
+  }, [isVideoOn, isScreenSharing, layout, spotlightUserId]);
 
   const handleUserSpeaking = (data: { userId: string; isSpeaking: boolean }) => {
     setParticipants(prev => {
@@ -1246,19 +1256,21 @@ export default function RoomVoiceChatPage() {
             {/* Main spotlight area */}
             <div className="flex-1 relative rounded-3xl overflow-hidden bg-zinc-900/40 border border-zinc-800/50 min-h-[300px]">
               {(() => {
-                const sp = spotlightUserId ? participants.find(p => p.userId === spotlightUserId) : participants.find(p => p.isVideoOn || p.isScreenSharing) || participants[0];
+                const currentSpotlightId = spotlightUserId || participants.find(p => p.isVideoOn || p.isScreenSharing)?.userId || participants[0]?.userId;
+                const sp = participants.find(p => p.userId === currentSpotlightId);
                 if (!sp) return null;
                 const isLocal = sp.userId === user?._id;
+                const isSharing = sp.isScreenSharing;
                 return (
                   <>
                     {sp.isVideoOn ? (
                       isLocal ? (
                         <video
-                          ref={localVideoElRef}
+                          ref={attachLocalVideoRef}
                           autoPlay
                           playsInline
                           muted
-                          className="absolute inset-0 w-full h-full object-contain bg-black"
+                          className={`absolute inset-0 w-full h-full bg-black ${isSharing ? 'object-contain' : 'object-cover'}`}
                           style={!isScreenSharing ? { transform: "scaleX(-1)" } : undefined}
                         />
                       ) : (
@@ -1267,7 +1279,7 @@ export default function RoomVoiceChatPage() {
                           autoPlay
                           playsInline
                           muted
-                          className="absolute inset-0 w-full h-full object-contain bg-black"
+                          className={`absolute inset-0 w-full h-full bg-black ${isSharing ? 'object-contain' : 'object-cover'}`}
                         />
                       )
                     ) : (
@@ -1310,41 +1322,44 @@ export default function RoomVoiceChatPage() {
               })()}
             </div>
 
-            {/* Bottom strip — other participants */}
+            {/* Bottom strip — everyone EXCEPT the current spotlight user */}
             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
-              {participants.filter(p => p.userId !== (spotlightUserId || participants.find(s => s.isVideoOn || s.isScreenSharing)?.userId || participants[0]?.userId)).map((p) => (
-                <div
-                  key={p.userId}
-                  onClick={() => setSpotlightUserId(p.userId)}
-                  className={`relative flex-shrink-0 w-28 h-28 rounded-2xl overflow-hidden bg-zinc-900/60 border cursor-pointer transition-all hover:border-zinc-600 ${
-                    p.isSpeaking ? 'border-emerald-500/50' : 'border-zinc-800/50'
-                  }`}
-                >
-                  {p.isVideoOn ? (
-                    p.userId === user?._id ? (
-                      <video ref={!spotlightUserId || spotlightUserId !== user?._id ? localVideoElRef : undefined} autoPlay playsInline muted className="w-full h-full object-cover" style={!isScreenSharing ? { transform: "scaleX(-1)" } : undefined} />
-                    ) : (
-                      <video ref={(el) => attachVideoRef(p.userId, el)} autoPlay playsInline muted className="w-full h-full object-cover" />
-                    )
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center" style={{ backgroundColor: p.color || '#27272a' }}>
-                      {p.avatar ? (
-                        <img src={p.avatar} alt={p.name} className="w-10 h-10 rounded-full object-cover" />
+              {(() => {
+                const currentSpotlightId = spotlightUserId || participants.find(p => p.isVideoOn || p.isScreenSharing)?.userId || participants[0]?.userId;
+                return participants.filter(p => p.userId !== currentSpotlightId).map((p) => (
+                  <div
+                    key={p.userId}
+                    onClick={() => setSpotlightUserId(p.userId)}
+                    className={`relative flex-shrink-0 w-28 h-28 rounded-2xl overflow-hidden bg-zinc-900/60 border cursor-pointer transition-all hover:border-zinc-600 ${
+                      p.isSpeaking ? 'border-emerald-500/50' : 'border-zinc-800/50'
+                    }`}
+                  >
+                    {p.isVideoOn ? (
+                      p.userId === user?._id ? (
+                        <video ref={attachLocalVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" style={!isScreenSharing ? { transform: "scaleX(-1)" } : undefined} />
                       ) : (
-                        <span className="text-white text-lg font-bold opacity-80">{p.name?.[0]?.toUpperCase()}</span>
-                      )}
+                        <video ref={(el) => attachVideoRef(p.userId, el)} autoPlay playsInline muted className="w-full h-full object-cover" />
+                      )
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center" style={{ backgroundColor: p.color || '#27272a' }}>
+                        {p.avatar ? (
+                          <img src={p.avatar} alt={p.name} className="w-10 h-10 rounded-full object-cover" />
+                        ) : (
+                          <span className="text-white text-lg font-bold opacity-80">{p.name?.[0]?.toUpperCase()}</span>
+                        )}
+                      </div>
+                    )}
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
+                      <span className="text-white text-[10px] font-medium truncate block">{p.name}</span>
                     </div>
-                  )}
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
-                    <span className="text-white text-[10px] font-medium truncate block">{p.name}</span>
+                    {p.isScreenSharing && (
+                      <div className="absolute top-1 right-1 bg-emerald-500/20 rounded p-0.5">
+                        <MonitorUp className="w-2.5 h-2.5 text-emerald-400" />
+                      </div>
+                    )}
                   </div>
-                  {p.isScreenSharing && (
-                    <div className="absolute top-1 right-1 bg-emerald-500/20 rounded p-0.5">
-                      <MonitorUp className="w-2.5 h-2.5 text-emerald-400" />
-                    </div>
-                  )}
-                </div>
-              ))}
+                ));
+              })()}
             </div>
           </div>
         ) : (
@@ -1381,7 +1396,7 @@ export default function RoomVoiceChatPage() {
                     <>
                       {participant.userId === user?._id ? (
                         <video
-                          ref={localVideoElRef}
+                          ref={attachLocalVideoRef}
                           autoPlay
                           playsInline
                           muted
