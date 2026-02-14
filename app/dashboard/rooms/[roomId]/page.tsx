@@ -955,6 +955,7 @@ export default function RoomVoiceChatPage() {
             </AnimatePresence>
           </div>
         )}
+      </div>
 
         {/* ─── Floating Controls ─── */}
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 w-full max-w-fit px-4">
@@ -1116,7 +1117,6 @@ export default function RoomVoiceChatPage() {
             </div>
           </div>
         </div>
-      </div>
 
       {/* Close tools menu on click outside */}
       {showToolsMenu && (
