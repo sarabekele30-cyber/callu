@@ -22,6 +22,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { usePathname, useRouter } from "next/navigation";
 import { PhoneOff, DoorOpen } from "lucide-react";
+import { toast } from "sonner";
 
 interface Room {
   _id: string;
@@ -145,11 +146,11 @@ export function DashboardSidebar() {
           roomType: "public",
         });
       } else {
-        alert(data.message || "Failed to create room");
+        toast.error(data.message || "Failed to create room");
       }
     } catch (error) {
       console.error("Failed to create room:", error);
-      alert("Failed to create room");
+      toast.error("Failed to create room");
     } finally {
       setCreating(false);
     }
@@ -196,12 +197,13 @@ export function DashboardSidebar() {
 
       if (response.ok) {
         setRooms((prev) => prev.filter((room) => room._id !== roomId));
+        toast.success("Room deleted successfully");
       } else {
-        alert("Failed to delete room");
+        toast.error("Failed to delete room");
       }
     } catch (error) {
       console.error("Failed to delete room:", error);
-      alert("Failed to delete room");
+      toast.error("Failed to delete room");
     }
   };
 

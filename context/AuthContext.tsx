@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 interface User {
   _id: string;
@@ -63,7 +64,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return true;
       } else {
         const error = await res.json();
-        alert(error.message);
+        toast.error(error.message);
         return false;
       }
     } catch (e) {

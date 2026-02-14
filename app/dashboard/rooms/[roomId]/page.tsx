@@ -7,6 +7,7 @@ import { useRouter, useParams } from "next/navigation";
 import { Volume2, VolumeX, PhoneOff, Users as UsersIcon, Mic, MicOff, Video, VideoOff, MonitorUp, MonitorOff, PictureInPicture2, LayoutGrid, Maximize2 } from "lucide-react";
 import { useSocket } from "@/context/SocketContext";
 import { useCall } from "@/context/CallContext";
+import { toast } from "sonner";
 
 interface Room {
   _id: string;
@@ -368,7 +369,7 @@ export default function RoomVoiceChatPage() {
         setRoom(data.rooms[0]);
         setCurrentRoomName(data.rooms[0].name);
       } else {
-        alert("Room not found");
+        toast.error("Room not found");
         router.push("/dashboard/members");
       }
     } catch (error) {
@@ -396,7 +397,7 @@ export default function RoomVoiceChatPage() {
       return stream;
     } catch (error) {
       console.error("Failed to get audio stream:", error);
-      alert("Please enable microphone access to join voice chat");
+      toast.error("Please enable microphone access to join voice chat");
       return null;
     }
   };
@@ -737,9 +738,12 @@ export default function RoomVoiceChatPage() {
       
       if (pc) {
         try {
+          // Handle renegotiation: if not stable, rollback first
           if (pc.signalingState !== "stable") {
-            return;
+            console.log(`[${fromUserId}] Peer connection not stable (${pc.signalingState}), rolling back`);
+            await pc.setLocalDescription({ type: "rollback" });
           }
+          
           await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
           
           await flushIceCandidates(fromUserId, pc);
@@ -928,8 +932,8 @@ export default function RoomVoiceChatPage() {
         localVideoTrackRef.current = videoTrack;
         localVideoStreamRef.current = cameraStream;
 
-        // Replace track on all peer connections
-        for (const [, pc] of peerConnectionsRef.current) {
+        // Replace track on all peer connections AND renegotiate
+        for (const [peerId, pc] of peerConnectionsRef.current) {
           // Find the video sender (transceiver with video kind)
           const videoSender = pc.getSenders().find(s => {
             if (s.track?.kind === 'video') return true;
@@ -939,6 +943,21 @@ export default function RoomVoiceChatPage() {
           });
           if (videoSender) {
             await videoSender.replaceTrack(videoTrack);
+            
+            // Trigger renegotiation to ensure remote peer receives the video
+            if (pc.signalingState === 'stable' && socket) {
+              try {
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                socket.emit("room-signal", {
+                  roomId,
+                  targetUserId: peerId,
+                  signal: { type: "offer", sdp: offer },
+                });
+              } catch (err) {
+                console.error(`Failed to renegotiate with ${peerId}:`, err);
+              }
+            }
           }
         }
 
@@ -955,7 +974,7 @@ export default function RoomVoiceChatPage() {
         }
       } catch (err) {
         console.error("Failed to get camera:", err);
-        alert("Camera access denied or unavailable.");
+        toast.error("Camera access denied or unavailable.");
       }
     }
   };
@@ -977,8 +996,8 @@ export default function RoomVoiceChatPage() {
         // Save camera track if we have one
         cameraTrackRef.current = localVideoTrackRef.current;
 
-        // Replace video track on ALL peer connections
-        for (const [, pc] of peerConnectionsRef.current) {
+        // Replace video track on ALL peer connections AND renegotiate
+        for (const [peerId, pc] of peerConnectionsRef.current) {
           const videoSender = pc.getSenders().find(s => {
             if (s.track?.kind === 'video') return true;
             const transceiver = pc.getTransceivers().find(t => t.sender === s && t.receiver.track?.kind === 'video');
@@ -986,6 +1005,21 @@ export default function RoomVoiceChatPage() {
           });
           if (videoSender) {
             await videoSender.replaceTrack(screenTrack);
+            
+            // Trigger renegotiation for reliable screen share
+            if (pc.signalingState === 'stable' && socket) {
+              try {
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                socket.emit("room-signal", {
+                  roomId,
+                  targetUserId: peerId,
+                  signal: { type: "offer", sdp: offer },
+                });
+              } catch (err) {
+                console.error(`Failed to renegotiate screen share with ${peerId}:`, err);
+              }
+            }
           }
         }
 

@@ -9,6 +9,7 @@ import CustomContextMenu from "@/components/CustomContextMenu";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { Toaster, toast } from "sonner";
 
 export default function DashboardLayout({
   children,
@@ -23,7 +24,7 @@ export default function DashboardLayout({
       if (!user) {
         router.push("/");
       } else if (user.status !== "approved") {
-        alert("Account not approved yet.");
+        toast.error("Account not approved yet.");
         router.push("/");
       }
     }
@@ -44,6 +45,18 @@ export default function DashboardLayout({
            <CallManager />
            <TermsModal />
            <CustomContextMenu />
+           <Toaster 
+             position="top-center" 
+             theme="dark"
+             toastOptions={{
+               style: {
+                 background: '#18181b',
+                 border: '1px solid #27272a',
+                 color: '#fff',
+               },
+               className: 'font-dm',
+             }}
+           />
         </div>
       </CallProvider>
     </SocketProvider>

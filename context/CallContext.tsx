@@ -1,5 +1,6 @@
 "use client";
 import React, { createContext, useContext, useState } from "react";
+import { toast } from "sonner";
 
 interface CallContextType {
   callUser: (userId: string, userName: string, userAvatar?: string, callType?: "voice" | "video") => void;
@@ -40,7 +41,7 @@ export const CallProvider = ({ children }: { children: React.ReactNode }) => {
 
   const callUser = (userId: string, userName: string, userAvatar?: string, callType: "voice" | "video" = "voice") => {
     if (isInCall) {
-      alert("You are already in a call. Please end the current call first.");
+      toast.error("You are already in a call. Please end the current call first.");
       return;
     }
     setOutgoingCallData({ userId, userName, userAvatar, callType });

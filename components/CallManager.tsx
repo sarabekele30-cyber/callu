@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useCall } from "@/context/CallContext";
 import { Phone, PhoneOff, Mic, MicOff, Minimize2, Maximize2, Video, VideoOff, Volume2, ChevronDown, MonitorUp, MonitorOff, ArrowsUpFromLine, PictureInPicture2 } from "lucide-react";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
+import { toast } from "sonner";
 
 // ICE server config shared by both caller and answerer
 const ICE_CONFIG: RTCConfiguration = {
@@ -666,7 +667,7 @@ export default function CallManager() {
       
       if (callType === "video" && videoTracks.length === 0) {
         console.warn("[CALLER] Video call requested but no video track obtained!");
-        alert("Camera not available. Please check your camera permissions and try again.");
+        toast.error("Camera not available. Please check your camera permissions and try again.");
         endCall();
         return;
       }
@@ -794,7 +795,7 @@ export default function CallManager() {
         const errorMsg = callType === "video" 
           ? `Camera access denied or unavailable: ${mediaErr.message}\n\nPlease ensure:\n1. Camera permission is granted\n2. No other app is using the camera\n3. You're on HTTPS (required for camera access)`
           : `Microphone access denied: ${mediaErr.message}`;
-        alert(errorMsg);
+        toast.error(errorMsg);
         endCall();
         return;
       }
@@ -812,7 +813,7 @@ export default function CallManager() {
       
       if (callType === "video" && videoTracks.length === 0) {
         console.warn("[ANSWERER] Video call requested but no video track obtained!");
-        alert("Camera not available. Please check your camera permissions and try again.");
+        toast.error("Camera not available. Please check your camera permissions and try again.");
         endCall();
         return;
       }

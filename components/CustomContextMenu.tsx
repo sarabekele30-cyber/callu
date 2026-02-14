@@ -17,6 +17,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
 
 export default function CustomContextMenu() {
   const [isOpen, setIsOpen] = useState(false);
@@ -87,20 +88,14 @@ export default function CustomContextMenu() {
     if (currentRoomId) {
       const link = `${window.location.origin}/dashboard/rooms/${currentRoomId}`;
       navigator.clipboard.writeText(link);
-      // Could add a toast notification here
-      console.log("Room link copied!");
+      toast.success("Room link copied to clipboard!");
     }
   };
 
   const openKeyboardShortcuts = () => {
-    alert(
-      "Keyboard Shortcuts:\n\n" +
-      "• M - Mute/Unmute\n" +
-      "• D - Deafen/Undeafen\n" +
-      "• V - Toggle Camera\n" +
-      "• S - Share Screen\n" +
-      "• ESC - Close Menus\n" +
-      "• CTRL+K - Quick Search"
+    toast.info(
+      "M: Mute/Unmute • D: Deafen • V: Camera • S: Screen • ESC: Close",
+      { duration: 5000 }
     );
   };
 
@@ -116,11 +111,9 @@ export default function CustomContextMenu() {
   };
 
   const showAbout = () => {
-    alert(
-      "CALLU\nVersion 1.0.0\n\n" +
-      "An exclusive community platform for voice, video,\n" +
-      "and serendipitous connections.\n\n" +
-      "© 2026 CALLU. All rights reserved."
+    toast.info(
+      "CALLU v1.0.0 - Exclusive community platform for voice, video, and serendipitous connections. © 2026",
+      { duration: 4000 }
     );
   };
 

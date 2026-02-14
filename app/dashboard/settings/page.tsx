@@ -14,6 +14,7 @@ import {
   Trash2,
   Save
 } from "lucide-react";
+import { toast } from "sonner";
 
 export default function SettingsPage() {
   const { user, logout } = useAuth();
@@ -48,10 +49,10 @@ export default function SettingsPage() {
       // TODO: Implement API call to update profile
       // await fetch('/api/user/update', { method: 'POST', body: JSON.stringify({ name, email, mobile }) });
       console.log("Saving profile:", { name, email, mobile });
-      alert("Profile updated successfully!");
+      toast.success("Profile updated successfully!");
     } catch (err) {
       console.error("Failed to update profile:", err);
-      alert("Failed to update profile");
+      toast.error("Failed to update profile");
     } finally {
       setLoading(false);
     }

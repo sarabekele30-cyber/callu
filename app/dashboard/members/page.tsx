@@ -5,6 +5,7 @@ import { useSocket } from "@/context/SocketContext";
 import { useCall } from "@/context/CallContext";
 import { Bell, Mic, Video } from "lucide-react";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
+import { toast } from "sonner";
 
 interface User {
   _id: string;
@@ -55,14 +56,14 @@ export default function MembersPage() {
       });
       if (!res.ok) {
         const data = await res.json();
-        alert(data.message || "Failed to send notification");
+        toast.error(data.message || "Failed to send notification");
         setNotifyState((prev) => ({ ...prev, [targetUserId]: "idle" }));
         return;
       }
       setNotifyState((prev) => ({ ...prev, [targetUserId]: "sent" }));
     } catch (err) {
       console.error(err);
-      alert("Failed to send notification");
+      toast.error("Failed to send notification");
       setNotifyState((prev) => ({ ...prev, [targetUserId]: "idle" }));
     }
   };

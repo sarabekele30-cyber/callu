@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { X, ArrowRight, Loader2, ShieldCheck, Lock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { toast } from "sonner";
 
 export default function ApplyModal({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState(1);
@@ -23,7 +24,7 @@ export default function ApplyModal({ onClose }: { onClose: () => void }) {
       if (res.ok) {
         setSuccess(true);
       } else {
-        alert(data.message);
+        toast.error(data.message);
       }
     } catch (err) {
       console.error(err);
