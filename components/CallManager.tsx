@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSocket } from "@/context/SocketContext";
 import { useAuth } from "@/context/AuthContext";
 import { useCall } from "@/context/CallContext";
-import { Phone, PhoneOff, Mic, MicOff, Minimize2, Maximize2, Video, VideoOff } from "lucide-react";
+import { Phone, PhoneOff, Mic, MicOff, Minimize2, Maximize2, Video, VideoOff, Volume2, ChevronDown } from "lucide-react";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 
 // ICE server config shared by both caller and answerer
@@ -56,10 +56,17 @@ export default function CallManager() {
   const [isMinimized, setIsMinimized] = useState(false);
   const [isVideoOn, setIsVideoOn] = useState(true);
   const [remoteVideoAvailable, setRemoteVideoAvailable] = useState(false);
+  const [availableMics, setAvailableMics] = useState<MediaDeviceInfo[]>([]);
+  const [availableSpeakers, setAvailableSpeakers] = useState<MediaDeviceInfo[]>([]);
+  const [selectedMicId, setSelectedMicId] = useState<string | null>(null);
+  const [selectedSpeakerId, setSelectedSpeakerId] = useState<string | null>(null);
+  const [showMicMenu, setShowMicMenu] = useState(false);
+  const [showSpeakerMenu, setShowSpeakerMenu] = useState(false);
 
   const myVideo = useRef<HTMLVideoElement>(null);
   const userVideo = useRef<HTMLVideoElement>(null);
-  const remoteAudio = useRef<HTMLAudioElement>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
   const connectionRef = useRef<RTCPeerConnection | null>(null);
   const incomingRingtone = useRef<HTMLAudioElement | null>(null);
   const outgoingRingtone = useRef<HTMLAudioElement | null>(null);
@@ -213,6 +220,14 @@ export default function CallManager() {
       console.log("✅ getUserMedia is available");
     }
     
+    // Create a persistent audio element for remote call audio (survives re-renders)
+    const audioEl = document.createElement('audio');
+    audioEl.autoplay = true;
+    audioEl.style.display = 'none';
+    document.body.appendChild(audioEl);
+    remoteAudioRef.current = audioEl;
+    console.log("✅ Created persistent remote audio element");
+
     incomingRingtone.current = new Audio("/music/callin.mp3");
     incomingRingtone.current.loop = true;
     incomingRingtone.current.volume = 1;
@@ -230,7 +245,16 @@ export default function CallManager() {
       setRingtoneMuted(!!isMuted);
     }, 200);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      // Remove the persistent audio element
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.pause();
+        remoteAudioRef.current.srcObject = null;
+        remoteAudioRef.current.remove();
+        remoteAudioRef.current = null;
+      }
+    };
   }, []);
 
   // ─── Local cleanup (no socket emit) ──────────────────────────
@@ -257,8 +281,11 @@ export default function CallManager() {
 
     if (myVideo.current) myVideo.current.srcObject = null;
     if (userVideo.current) userVideo.current.srcObject = null;
-    if (remoteAudio.current) remoteAudio.current.srcObject = null;
-    if (remoteAudio.current) remoteAudio.current.srcObject = null;
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.pause();
+      remoteAudioRef.current.srcObject = null;
+    }
+    remoteStreamRef.current = null;
 
     iceCandidateBuffer.current = [];
     setIncomingCall(null);
@@ -332,6 +359,11 @@ export default function CallManager() {
 
     if (myVideo.current) myVideo.current.srcObject = null;
     if (userVideo.current) userVideo.current.srcObject = null;
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.pause();
+      remoteAudioRef.current.srcObject = null;
+    }
+    remoteStreamRef.current = null;
 
     iceCandidateBuffer.current = [];
     setOutgoingCallData(null);
@@ -468,32 +500,36 @@ export default function CallManager() {
       setRemoteVideoAvailable(true);
     }
 
-    // Set stream on video element
+    // Set stream on video element (muted — audio goes through the persistent <audio> element)
     const remoteStream = event.streams[0];
-    userVideo.current.srcObject = remoteStream;
-    userVideo.current.muted = true;
-    userVideo.current.volume = 0;
+    remoteStreamRef.current = remoteStream;
+
+    if (userVideo.current) {
+      userVideo.current.srcObject = remoteStream;
+      userVideo.current.muted = true;
+      userVideo.current.volume = 0;
+      userVideo.current.play()
+        .then(() => console.log(`✅ [${role}] Remote video element playing (muted for video-only)`))
+        .catch((err) => console.error(`❌ [${role}] Remote video play failed:`, err.message));
+    }
 
     const tracks = remoteStream.getTracks();
     console.log(`[${role}] Set remote stream with ${tracks.length} tracks:`,
       tracks.map((t) => `${t.kind} (${t.label}) enabled:${t.enabled} muted:${t.muted}`)
     );
 
-    userVideo.current.play()
-      .then(() => {
-        console.log(`✅ [${role}] Remote video playing (muted: ${userVideo.current!.muted})`);
-      })
-      .catch((err) => {
-        console.error(`❌ [${role}] Remote video playback failed:`, err.message);
-      });
-
-    if (remoteAudio.current) {
-      remoteAudio.current.srcObject = remoteStream;
-      remoteAudio.current.muted = false;
-      remoteAudio.current.volume = 1;
-      remoteAudio.current.play()
+    // Route audio through the persistent programmatic <audio> element (survives re-renders)
+    const audioEl = remoteAudioRef.current;
+    if (audioEl) {
+      audioEl.srcObject = remoteStream;
+      audioEl.muted = false;
+      audioEl.volume = 1;
+      if (selectedSpeakerId) {
+        void applySpeakerSink(selectedSpeakerId);
+      }
+      audioEl.play()
         .then(() => {
-          console.log(`✅ [${role}] Remote audio playing (vol: ${remoteAudio.current!.volume}, muted: ${remoteAudio.current!.muted})`);
+          console.log(`✅ [${role}] Remote audio playing via persistent element (vol: ${audioEl.volume}, muted: ${audioEl.muted})`);
           setAudioBlocked(false);
         })
         .catch((err) => {
@@ -501,7 +537,7 @@ export default function CallManager() {
           setAudioBlocked(true);
         });
     } else {
-      console.warn(`[${role}] Remote audio element not available`);
+      console.error(`❌ [${role}] Persistent audio element is null! Audio will not work.`);
     }
 
     startSpeakingDetector(remoteStream, setIsRemoteSpeaking, remoteAnalyserRef, remoteSpeakRaf);
@@ -789,6 +825,86 @@ export default function CallManager() {
     }
   };
 
+  const refreshDeviceLists = async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const mics = devices.filter((d) => d.kind === "audioinput");
+      const speakers = devices.filter((d) => d.kind === "audiooutput");
+      setAvailableMics(mics);
+      setAvailableSpeakers(speakers);
+
+      const currentMicId = streamRef.current?.getAudioTracks()[0]?.getSettings().deviceId || null;
+      const micStillValid = selectedMicId && mics.some((d) => d.deviceId === selectedMicId);
+      if (!micStillValid) {
+        const found = currentMicId ? mics.find((d) => d.deviceId === currentMicId) : undefined;
+        const nextMic = found?.deviceId || mics[0]?.deviceId || null;
+        setSelectedMicId(nextMic);
+      }
+
+      const speakerStillValid = selectedSpeakerId && speakers.some((d) => d.deviceId === selectedSpeakerId);
+      if (!speakerStillValid) {
+        const defaultSpeaker = speakers.find((d) => d.deviceId === "default")?.deviceId || speakers[0]?.deviceId || null;
+        setSelectedSpeakerId(defaultSpeaker);
+      }
+    } catch (err) {
+      console.error("Failed to enumerate devices:", err);
+    }
+  };
+
+  const applySpeakerSink = async (deviceId: string) => {
+    if (!remoteAudioRef.current) return;
+    const audioEl = remoteAudioRef.current as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
+    if (typeof audioEl.setSinkId !== "function") {
+      console.warn("setSinkId not supported in this browser.");
+      return;
+    }
+    try {
+      await audioEl.setSinkId(deviceId);
+      console.log("🔊 Speaker set to device:", deviceId);
+    } catch (err) {
+      console.error("Failed to set speaker device:", err);
+    }
+  };
+
+  const switchMicDevice = async (deviceId: string) => {
+    try {
+      const newAudioStream = await navigator.mediaDevices.getUserMedia({
+        audio: { deviceId: { exact: deviceId } },
+        video: false,
+      });
+      const newAudioTrack = newAudioStream.getAudioTracks()[0];
+      if (!newAudioTrack) return;
+
+      newAudioTrack.enabled = isMicOn;
+
+      const peer = connectionRef.current;
+      const audioSender = peer?.getSenders().find((s) => s.track?.kind === "audio");
+      if (audioSender) {
+        await audioSender.replaceTrack(newAudioTrack);
+      }
+
+      const current = streamRef.current;
+      const newStream = new MediaStream();
+      if (current) {
+        current.getVideoTracks().forEach((t) => newStream.addTrack(t));
+        const oldAudio = current.getAudioTracks()[0];
+        if (oldAudio) oldAudio.stop();
+      }
+      newStream.addTrack(newAudioTrack);
+
+      streamRef.current = newStream;
+      setStream(newStream);
+      if (myVideo.current) myVideo.current.srcObject = newStream;
+      startSpeakingDetector(newStream, setIsLocalSpeaking, localAnalyserRef, localSpeakRaf);
+
+      setSelectedMicId(deviceId);
+      console.log("🎤 Microphone switched to:", deviceId);
+    } catch (err) {
+      console.error("Failed to switch microphone:", err);
+    }
+  };
+
   const enableAudio = () => {
     // Unmute ringtones on click
     if (incomingRingtone.current && !incomingRingtone.current.paused && incomingRingtone.current.muted) {
@@ -798,8 +914,8 @@ export default function CallManager() {
       outgoingRingtone.current.muted = false;
     }
     // Unmute WebRTC audio
-    if (remoteAudio.current && audioBlocked) {
-      remoteAudio.current.play()
+    if (remoteAudioRef.current && audioBlocked) {
+      remoteAudioRef.current.play()
         .then(() => {
           console.log("✅ Audio enabled by click");
           setAudioBlocked(false);
@@ -811,6 +927,27 @@ export default function CallManager() {
       audioContextRef.current.resume();
     }
   };
+
+  useEffect(() => {
+    if (!stream) return;
+    refreshDeviceLists();
+
+    const handleDeviceChange = () => {
+      refreshDeviceLists();
+    };
+
+    navigator.mediaDevices?.addEventListener?.("devicechange", handleDeviceChange);
+    return () => {
+      navigator.mediaDevices?.removeEventListener?.("devicechange", handleDeviceChange);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stream]);
+
+  useEffect(() => {
+    if (selectedSpeakerId) {
+      void applySpeakerSink(selectedSpeakerId);
+    }
+  }, [selectedSpeakerId]);
 
   // ─── Trigger outgoing call ───────────────────────────────────
   useEffect(() => {
@@ -894,7 +1031,6 @@ export default function CallManager() {
             </button>
           </div>
         </div>
-        <audio ref={remoteAudio} autoPlay className="hidden" />
       </div>
     );
   }
@@ -955,16 +1091,112 @@ export default function CallManager() {
 
             {/* Call Controls */}
             <div className="flex items-center gap-6">
-              <div className="flex flex-col items-center gap-2">
-                <button
-                  onClick={toggleMic}
-                  className={`p-4 rounded-full transition-all cursor-pointer ${
-                    !isMicOn ? "bg-red-500 text-white shadow-lg shadow-red-500/50" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
-                  }`}
-                >
-                  {isMicOn ? <Mic size={24} /> : <MicOff size={24} />}
-                </button>
+              <div className="flex flex-col items-center gap-2 relative">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={toggleMic}
+                    className={`p-4 rounded-full transition-all cursor-pointer ${
+                      !isMicOn ? "bg-red-500 text-white shadow-lg shadow-red-500/50" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+                    }`}
+                    aria-label="Toggle mic"
+                  >
+                    {isMicOn ? <Mic size={24} /> : <MicOff size={24} />}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowMicMenu((prev) => !prev);
+                      setShowSpeakerMenu(false);
+                    }}
+                    className="p-2 rounded-full bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                    aria-label="Select microphone"
+                  >
+                    <ChevronDown size={16} />
+                  </button>
+                </div>
                 <span className="text-xs text-zinc-500">{isMicOn ? "Mute" : "Unmute"}</span>
+
+                {showMicMenu && (
+                  <div className="absolute bottom-14 left-1/2 -translate-x-1/2 bg-zinc-900 border border-zinc-700 rounded-xl shadow-xl p-2 min-w-[220px] z-50">
+                    {availableMics.length === 0 ? (
+                      <div className="text-xs text-zinc-400 px-2 py-1">No microphones found</div>
+                    ) : (
+                      availableMics.map((device, index) => (
+                        <button
+                          key={device.deviceId}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void switchMicDevice(device.deviceId);
+                            setShowMicMenu(false);
+                          }}
+                          className={`w-full text-left px-2 py-1 rounded-lg text-xs hover:bg-zinc-800 ${
+                            selectedMicId === device.deviceId ? "text-emerald-400" : "text-zinc-200"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate">{device.label || `Microphone ${index + 1}`}</span>
+                            {selectedMicId === device.deviceId && <span className="text-[10px]">Active</span>}
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col items-center gap-2 relative">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowSpeakerMenu((prev) => !prev);
+                      setShowMicMenu(false);
+                    }}
+                    className="p-4 rounded-full transition-all cursor-pointer bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+                    aria-label="Select speaker"
+                  >
+                    <Volume2 size={24} />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowSpeakerMenu((prev) => !prev);
+                      setShowMicMenu(false);
+                    }}
+                    className="p-2 rounded-full bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                    aria-label="Select speaker"
+                  >
+                    <ChevronDown size={16} />
+                  </button>
+                </div>
+                <span className="text-xs text-zinc-500">Speaker</span>
+
+                {showSpeakerMenu && (
+                  <div className="absolute bottom-14 left-1/2 -translate-x-1/2 bg-zinc-900 border border-zinc-700 rounded-xl shadow-xl p-2 min-w-[220px] z-50">
+                    {availableSpeakers.length === 0 ? (
+                      <div className="text-xs text-zinc-400 px-2 py-1">No speakers found</div>
+                    ) : (
+                      availableSpeakers.map((device, index) => (
+                        <button
+                          key={device.deviceId}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedSpeakerId(device.deviceId);
+                            setShowSpeakerMenu(false);
+                          }}
+                          className={`w-full text-left px-2 py-1 rounded-lg text-xs hover:bg-zinc-800 ${
+                            selectedSpeakerId === device.deviceId ? "text-emerald-400" : "text-zinc-200"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate">{device.label || `Speaker ${index + 1}`}</span>
+                            {selectedSpeakerId === device.deviceId && <span className="text-[10px]">Active</span>}
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col items-center gap-2">
@@ -979,7 +1211,6 @@ export default function CallManager() {
             <div className="hidden">
               <video playsInline muted ref={myVideo} autoPlay />
               <video playsInline ref={userVideo} autoPlay controls={false} />
-              <audio ref={remoteAudio} autoPlay />
             </div>
           </div>
         ) : (
@@ -1088,16 +1319,110 @@ export default function CallManager() {
                 </button>
               </div>
 
-              <div className="flex flex-col items-center gap-1">
-                <button
-                  onClick={toggleMic}
-                  className={`p-3 rounded-full transition-all cursor-pointer ${
-                    !isMicOn ? "bg-red-500 text-white shadow-lg shadow-red-500/50" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
-                  }`}
-                  aria-label="Toggle mic"
-                >
-                  {isMicOn ? <Mic size={20} /> : <MicOff size={20} />}
-                </button>
+              <div className="flex flex-col items-center gap-1 relative">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={toggleMic}
+                    className={`p-3 rounded-full transition-all cursor-pointer ${
+                      !isMicOn ? "bg-red-500 text-white shadow-lg shadow-red-500/50" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+                    }`}
+                    aria-label="Toggle mic"
+                  >
+                    {isMicOn ? <Mic size={20} /> : <MicOff size={20} />}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowMicMenu((prev) => !prev);
+                      setShowSpeakerMenu(false);
+                    }}
+                    className="p-2 rounded-full bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                    aria-label="Select microphone"
+                  >
+                    <ChevronDown size={14} />
+                  </button>
+                </div>
+
+                {showMicMenu && (
+                  <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-zinc-900 border border-zinc-700 rounded-xl shadow-xl p-2 min-w-[220px] z-50">
+                    {availableMics.length === 0 ? (
+                      <div className="text-xs text-zinc-400 px-2 py-1">No microphones found</div>
+                    ) : (
+                      availableMics.map((device, index) => (
+                        <button
+                          key={device.deviceId}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void switchMicDevice(device.deviceId);
+                            setShowMicMenu(false);
+                          }}
+                          className={`w-full text-left px-2 py-1 rounded-lg text-xs hover:bg-zinc-800 ${
+                            selectedMicId === device.deviceId ? "text-emerald-400" : "text-zinc-200"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate">{device.label || `Microphone ${index + 1}`}</span>
+                            {selectedMicId === device.deviceId && <span className="text-[10px]">Active</span>}
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col items-center gap-1 relative">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowSpeakerMenu((prev) => !prev);
+                      setShowMicMenu(false);
+                    }}
+                    className="p-3 rounded-full transition-all cursor-pointer bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+                    aria-label="Select speaker"
+                  >
+                    <Volume2 size={20} />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowSpeakerMenu((prev) => !prev);
+                      setShowMicMenu(false);
+                    }}
+                    className="p-2 rounded-full bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                    aria-label="Select speaker"
+                  >
+                    <ChevronDown size={14} />
+                  </button>
+                </div>
+
+                {showSpeakerMenu && (
+                  <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-zinc-900 border border-zinc-700 rounded-xl shadow-xl p-2 min-w-[220px] z-50">
+                    {availableSpeakers.length === 0 ? (
+                      <div className="text-xs text-zinc-400 px-2 py-1">No speakers found</div>
+                    ) : (
+                      availableSpeakers.map((device, index) => (
+                        <button
+                          key={device.deviceId}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedSpeakerId(device.deviceId);
+                            setShowSpeakerMenu(false);
+                          }}
+                          className={`w-full text-left px-2 py-1 rounded-lg text-xs hover:bg-zinc-800 ${
+                            selectedSpeakerId === device.deviceId ? "text-emerald-400" : "text-zinc-200"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate">{device.label || `Speaker ${index + 1}`}</span>
+                            {selectedSpeakerId === device.deviceId && <span className="text-[10px]">Active</span>}
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col items-center gap-1">
@@ -1112,7 +1437,6 @@ export default function CallManager() {
               <video playsInline muted ref={myVideo} autoPlay />
               <video playsInline ref={userVideo} autoPlay controls={false} />
             </div>
-            <audio ref={remoteAudio} autoPlay className="hidden" />
           </div>
         )
       ) : (
