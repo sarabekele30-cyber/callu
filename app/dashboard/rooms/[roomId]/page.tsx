@@ -659,7 +659,7 @@ export default function RoomVoiceChatPage() {
   // ═══════════════════════════════════════════════════════════════════
 
   return (
-    <div className="relative min-h-screen bg-zinc-950 p-6 md:p-8 font-dm overflow-hidden flex flex-col">
+    <div className="relative min-h-[calc(100vh-4rem)] bg-zinc-950 p-4 md:p-6 font-dm overflow-hidden flex flex-col rounded-3xl border border-zinc-800/30">
       {/* Dynamic Background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-[128px] mix-blend-screen" />
