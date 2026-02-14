@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSocket } from "@/context/SocketContext";
 import { useAuth } from "@/context/AuthContext";
 import { useCall } from "@/context/CallContext";
-import { Phone, PhoneOff, Mic, MicOff, Minimize2, Maximize2, Video, VideoOff, Volume2, ChevronDown } from "lucide-react";
+import { Phone, PhoneOff, Mic, MicOff, Minimize2, Maximize2, Video, VideoOff, Volume2, ChevronDown, MonitorUp, MonitorOff, ArrowsUpFromLine } from "lucide-react";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 
 // ICE server config shared by both caller and answerer
@@ -62,6 +62,9 @@ export default function CallManager() {
   const [selectedSpeakerId, setSelectedSpeakerId] = useState<string | null>(null);
   const [showMicMenu, setShowMicMenu] = useState(false);
   const [showSpeakerMenu, setShowSpeakerMenu] = useState(false);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isSwapped, setIsSwapped] = useState(false);
+  const [pipHovered, setPipHovered] = useState(false);
 
   const myVideo = useRef<HTMLVideoElement>(null);
   const userVideo = useRef<HTMLVideoElement>(null);
@@ -77,6 +80,10 @@ export default function CallManager() {
   const remoteSpeakRaf = useRef<number | null>(null);
   const callStartRef = useRef<number | null>(null);
   const callLoggedRef = useRef(false);
+
+  // Screen sharing refs
+  const screenStreamRef = useRef<MediaStream | null>(null);
+  const cameraTrackRef = useRef<MediaStreamTrack | null>(null);
 
   // ICE candidate buffer - stores candidates that arrive before peer is ready
   const iceCandidateBuffer = useRef<RTCIceCandidateInit[]>([]);
@@ -310,6 +317,16 @@ export default function CallManager() {
     }
     setIsVideoOn(true);
     setRemoteVideoAvailable(false);
+    setIsScreenSharing(false);
+    setIsSwapped(false);
+    setPipHovered(false);
+
+    // Cleanup screen share
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach((t) => t.stop());
+      screenStreamRef.current = null;
+    }
+    cameraTrackRef.current = null;
 
     socket?.off("call-answered");
   };
@@ -822,6 +839,83 @@ export default function CallManager() {
     }
   };
 
+  const toggleScreenShare = async () => {
+    const peer = connectionRef.current;
+    if (!peer) return;
+
+    if (!isScreenSharing) {
+      // START screen sharing
+      try {
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: { cursor: "always" } as MediaTrackConstraints,
+          audio: false,
+        });
+        const screenTrack = screenStream.getVideoTracks()[0];
+        if (!screenTrack) return;
+
+        // Save current camera track so we can restore later
+        const currentVideoTrack = streamRef.current?.getVideoTracks()[0] || null;
+        cameraTrackRef.current = currentVideoTrack;
+
+        // Replace the video track on the peer connection
+        const videoSender = peer.getSenders().find((s) => s.track?.kind === "video");
+        if (videoSender) {
+          await videoSender.replaceTrack(screenTrack);
+        }
+
+        // Update local preview to show screen share
+        screenStreamRef.current = screenStream;
+        if (myVideo.current) {
+          const previewStream = new MediaStream([screenTrack]);
+          myVideo.current.srcObject = previewStream;
+        }
+
+        setIsScreenSharing(true);
+
+        // Listen for browser's native "Stop sharing" button
+        screenTrack.onended = () => {
+          void stopScreenShare();
+        };
+
+        console.log("🖥️ Screen sharing started");
+      } catch (err) {
+        // User cancelled the screen share picker — that's fine
+        console.log("Screen share cancelled or failed:", err);
+      }
+    } else {
+      // STOP screen sharing
+      await stopScreenShare();
+    }
+  };
+
+  const stopScreenShare = async () => {
+    const peer = connectionRef.current;
+
+    // Stop screen tracks
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach((t) => t.stop());
+      screenStreamRef.current = null;
+    }
+
+    // Restore camera track
+    const cameraTrack = cameraTrackRef.current;
+    if (cameraTrack && peer) {
+      const videoSender = peer.getSenders().find((s) => s.track?.kind === "video");
+      if (videoSender) {
+        await videoSender.replaceTrack(cameraTrack);
+      }
+    }
+    cameraTrackRef.current = null;
+
+    // Restore local preview
+    if (myVideo.current && streamRef.current) {
+      myVideo.current.srcObject = streamRef.current;
+    }
+
+    setIsScreenSharing(false);
+    console.log("🖥️ Screen sharing stopped");
+  };
+
   const refreshDeviceLists = async () => {
     if (!navigator.mediaDevices?.enumerateDevices) return;
     try {
@@ -1000,6 +1094,7 @@ export default function CallManager() {
           ref={myVideo}
           autoPlay
           className={`absolute bottom-1 right-1 w-16 h-16 rounded-lg object-cover border border-zinc-600 ${isVideoOn ? '' : 'hidden'}`}
+          style={!isScreenSharing ? { transform: "scaleX(-1)" } : undefined}
         />
 
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex flex-col justify-between p-2">
@@ -1228,16 +1323,28 @@ export default function CallManager() {
         ) : (
           // VIDEO CALL - Full-screen style
           <div className="fixed inset-0 bg-black z-50">
-            {/* Remote video — fills the ENTIRE screen */}
-            <video
-              playsInline
-              ref={userVideo}
-              autoPlay
-              className="absolute inset-0 w-full h-full object-cover"
-            />
+            {/* Main video — fills the ENTIRE screen */}
+            {/* When swapped: local is main, remote is PiP. Default: remote is main, local is PiP */}
+            {isSwapped ? (
+              <video
+                playsInline
+                muted
+                ref={myVideo}
+                autoPlay
+                className="absolute inset-0 w-full h-full object-cover"
+                style={!isScreenSharing ? { transform: "scaleX(-1)" } : undefined}
+              />
+            ) : (
+              <video
+                playsInline
+                ref={userVideo}
+                autoPlay
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+            )}
 
             {/* Fallback if no remote video */}
-            {!remoteVideoAvailable && (
+            {!remoteVideoAvailable && !isSwapped && (
               <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-black flex flex-col items-center justify-center z-[1]">
                 <div className="w-32 h-32 rounded-full mb-4 overflow-hidden ring-4 ring-green-500">
                   {incomingCall?.avatar ? (
@@ -1254,14 +1361,43 @@ export default function CallManager() {
               </div>
             )}
 
-            {/* Local video (picture-in-picture) — overlaid on top */}
-            <video
-              playsInline
-              muted
-              ref={myVideo}
-              autoPlay
-              className={`absolute top-4 right-4 w-32 h-40 object-cover rounded-2xl border-2 border-zinc-700/50 shadow-2xl z-20 ${isVideoOn ? '' : 'hidden'}`}
-            />
+            {/* PiP video — overlaid on top */}
+            <div
+              className={`absolute top-4 right-4 z-20 group ${(isSwapped || isVideoOn) ? '' : 'hidden'}`}
+              onMouseEnter={() => setPipHovered(true)}
+              onMouseLeave={() => setPipHovered(false)}
+            >
+              {isSwapped ? (
+                <video
+                  playsInline
+                  ref={userVideo}
+                  autoPlay
+                  className="w-32 h-40 object-cover rounded-2xl border-2 border-zinc-700/50 shadow-2xl"
+                />
+              ) : (
+                <video
+                  playsInline
+                  muted
+                  ref={myVideo}
+                  autoPlay
+                  className={`w-32 h-40 object-cover rounded-2xl border-2 border-zinc-700/50 shadow-2xl ${isVideoOn ? '' : 'hidden'}`}
+                  style={!isScreenSharing ? { transform: "scaleX(-1)" } : undefined}
+                />
+              )}
+              {/* Swap button on hover */}
+              {pipHovered && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsSwapped((prev) => !prev);
+                  }}
+                  className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-2xl backdrop-blur-[2px] cursor-pointer transition-all"
+                  aria-label="Swap video views"
+                >
+                  <ArrowsUpFromLine size={20} className="text-white drop-shadow-lg" />
+                </button>
+              )}
+            </div>
 
             {/* Minimize button */}
             <button
@@ -1326,6 +1462,18 @@ export default function CallManager() {
                     aria-label="Toggle camera"
                   >
                     {isVideoOn ? <Video size={20} /> : <VideoOff size={20} />}
+                  </button>
+                </div>
+
+                <div className="flex flex-col items-center gap-1">
+                  <button
+                    onClick={() => void toggleScreenShare()}
+                    className={`p-3 rounded-full transition-all cursor-pointer ${
+                      isScreenSharing ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/50" : "bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700"
+                    }`}
+                    aria-label="Toggle screen share"
+                  >
+                    {isScreenSharing ? <MonitorOff size={20} /> : <MonitorUp size={20} />}
                   </button>
                 </div>
 
