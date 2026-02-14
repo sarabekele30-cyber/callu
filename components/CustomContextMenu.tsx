@@ -14,7 +14,6 @@ import {
   UserCircle,
   Home,
   LogOut,
-  Sparkles,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -216,14 +215,6 @@ export default function CustomContextMenu() {
             top: `${position.y}px`,
           }}
         >
-          {/* Header */}
-          <div className="px-3 py-2 border-b border-zinc-800/50 flex items-center gap-2">
-            <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
-              CALLU Menu
-            </span>
-          </div>
-
           {/* Menu Items */}
           <div className="py-1">
             {menuItems.map((item, index) => (
