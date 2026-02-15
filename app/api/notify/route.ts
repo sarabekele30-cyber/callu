@@ -40,7 +40,7 @@ export async function POST(req: Request) {
     const callerAvatar = callerUser.avatarConfig?.image || "";
 
     const mailOptions = {
-      from: RESEND_FROM_EMAIL,
+      from: process.env.RESEND_FROM_EMAIL,
       to: targetUser.email,
       subject: `${callerName} is trying to reach you on CALLU`,
       text: `${callerName} tried to call you on CALLU. Open ${APP_URL} to connect and start the conversation.`,

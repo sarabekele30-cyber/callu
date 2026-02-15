@@ -83,7 +83,7 @@ connectDB().then(() => {
       expiresAt: { $lte: now },
       deletedAt: { $exists: false },
       provider: "imagekit",
-    }).limit(200);
+    } as any).limit(200);
 
     for (const upload of expired) {
       try {
