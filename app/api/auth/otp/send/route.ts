@@ -68,24 +68,57 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Verification code sent" }, { status: 200 });
     } catch (emailError: any) {
       const errorMsg = emailError?.message || emailError?.toString() || "Unknown email error";
-      console.error(`[OTP] Email delivery failed for ${email}:`, {
+      console.error(`[OTP] Email send failed for ${email}:`, {
         error: errorMsg,
         status: emailError?.status,
-        stack: emailError?.stack,
       });
       
-      // More detailed sandbox/config error messages
+      // Environment/config errors (4xx, auth)
       if (
-        errorMsg.includes("not verified") ||
-        errorMsg.includes("sandboxed") ||
-        errorMsg.includes("not in your list of verified") ||
-        errorMsg.includes("Invalid or missing") ||
-        errorMsg.includes("Resend error")
+        errorMsg.includes("not configured") ||
+        errorMsg.includes("Missing") ||
+        errorMsg.includes("401") ||
+        errorMsg.includes("403") ||
+        errorMsg.includes("Unauthorized") ||
+        errorMsg.includes("Forbidden")
       ) {
         return NextResponse.json(
           { 
-            message: "Email service temporarily unavailable. Please try again in a moment.",
-            code: "EMAIL_SERVICE_ERROR"
+            message: "Email service configuration error. Contact admin.",
+            code: "CONFIG_ERROR"
+          },
+          { status: 500 }
+        );
+      }
+
+      // Sandbox/recipient not verified errors (temporary, can retry)
+      if (
+        errorMsg.includes("not verified") ||
+        errorMsg.includes("sandboxed") ||
+        errorMsg.includes("not in your list") ||
+        errorMsg.includes("Invalid or missing")
+      ) {
+        console.warn(`[OTP] Sandbox/verification issue: ${errorMsg}`);
+        return NextResponse.json(
+          { 
+            message: "Email delivery temporarily unavailable. Try again soon.",
+            code: "SERVICE_UNAVAILABLE"
+          },
+          { status: 503 }
+        );
+      }
+
+      // Network/transient errors (5xx, timeouts, etc)
+      if (
+        errorMsg.includes("timeout") ||
+        errorMsg.includes("ECONNREFUSED") ||
+        errorMsg.includes("ETIMEDOUT") ||
+        errorMsg.includes("temporarily")
+      ) {
+        return NextResponse.json(
+          { 
+            message: "Email service temporarily unavailable. Please retry.",
+            code: "TRANSIENT_ERROR"
           },
           { status: 503 }
         );

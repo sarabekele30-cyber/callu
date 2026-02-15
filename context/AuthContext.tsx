@@ -45,32 +45,67 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     const init = async () => {
-      const storedSession = localStorage.getItem(SESSION_KEY);
-      if (storedSession) {
-        const parsed = JSON.parse(storedSession) as { token: string; expiresAt: string };
-        if (parsed?.token && parsed?.expiresAt && new Date(parsed.expiresAt).getTime() > Date.now()) {
+      try {
+        const storedSession = localStorage.getItem(SESSION_KEY);
+        if (storedSession) {
           try {
-            const res = await fetch("/api/auth/session", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ token: parsed.token }),
-            });
-            if (res.ok) {
-              const data = await res.json();
-              setUser(data.user);
-              localStorage.setItem(USER_KEY, JSON.stringify(data.user));
-              setIsLoading(false);
-              return;
+            const parsed = JSON.parse(storedSession) as { token: string; expiresAt: string };
+            
+            // Check if session is still valid (not expired)
+            if (parsed?.token && parsed?.expiresAt) {
+              const expiryTime = new Date(parsed.expiresAt).getTime();
+              const now = Date.now();
+              
+              if (expiryTime > now) {
+                console.log("[Auth] Session found, validating with server...");
+                try {
+                  const res = await fetch("/api/auth/session", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ token: parsed.token }),
+                  });
+                  
+                  if (res.ok) {
+                    const data = await res.json();
+                    console.log("[Auth] ✓ Session validated, user:", data.user?.email);
+                    setUser(data.user);
+                    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+                    setIsLoading(false);
+                    return;
+                  } else {
+                    console.warn("[Auth] Session validation failed:", res.status);
+                    // Session invalid or expired, clear it
+                    localStorage.removeItem(SESSION_KEY);
+                  }
+                } catch (error) {
+                  console.error("[Auth] Session validation error:", error);
+                }
+              } else {
+                console.warn("[Auth] Stored session expired, clearing...");
+                localStorage.removeItem(SESSION_KEY);
+              }
             }
-          } catch {}
+          } catch (parseError) {
+            console.error("[Auth] Failed to parse stored session:", parseError);
+            localStorage.removeItem(SESSION_KEY);
+          }
         }
-      }
 
-      const storedUser = localStorage.getItem(USER_KEY);
-      if (storedUser) {
-        setUser(JSON.parse(storedUser));
+        // Fallback: check if user is in localStorage (from previous login)
+        const storedUser = localStorage.getItem(USER_KEY);
+        if (storedUser) {
+          try {
+            const user = JSON.parse(storedUser);
+            console.log("[Auth] Using stored user from cache:", user.email);
+            setUser(user);
+          } catch (parseError) {
+            console.error("[Auth] Failed to parse stored user:", parseError);
+            localStorage.removeItem(USER_KEY);
+          }
+        }
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
     void init();

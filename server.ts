@@ -5,11 +5,15 @@ import { Server } from "socket.io";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import ImageKit from "imagekit";
+import { logConfigStatus } from "./lib/validateConfig";
 import User from "./models/User";
 import Room from "./models/Room";
 import RoomChatUpload from "./models/RoomChatUpload";
 
 dotenv.config();
+
+// Validate email configuration at startup
+logConfigStatus();
 
 const dev = process.env.NODE_ENV !== "production";
 const app = next({ dev, dir: __dirname });

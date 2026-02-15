@@ -46,6 +46,8 @@ export async function POST(req: Request) {
     const tokenHash = hashValue(sessionToken);
     const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000);
 
+    console.log(`[OTP] Creating session for user ${user.email}, expires at ${expiresAt.toISOString()}`);
+
     await LoginSession.create({
       userId: user._id.toString(),
       email,
@@ -55,7 +57,14 @@ export async function POST(req: Request) {
 
     await LoginOtp.deleteOne({ _id: otp._id });
 
-    return NextResponse.json({ user, sessionToken, expiresAt }, { status: 200 });
+    console.log(`[OTP] ✓ Session created. Token hash: ${tokenHash.substring(0, 16)}...`);
+    
+    // Return the full data including string version of expiresAt for localStorage
+    return NextResponse.json({
+      user: user.toObject ? user.toObject() : user,
+      sessionToken,
+      expiresAt: expiresAt.toISOString(),
+    }, { status: 200 });
   } catch (error: any) {
     console.error("OTP verify error:", error);
     return NextResponse.json({ message: error?.message || "Verification failed" }, { status: 500 });
