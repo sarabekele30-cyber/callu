@@ -94,12 +94,12 @@ export default function RoomMusicPlayer({ roomId, isOpen, onClose, onOpen }: Roo
   const playerOpts: YouTubeProps["opts"] = {
     height: "1",
     width: "1",
+    host: "https://www.youtube-nocookie.com",
     playerVars: {
       autoplay: 1,
       controls: 0,
       disablekb: 1,
       fs: 0,
-      modestbranding: 1,
       rel: 0,
       origin: typeof window !== "undefined" ? window.location.origin : "",
     },
@@ -250,15 +250,29 @@ export default function RoomMusicPlayer({ roomId, isOpen, onClose, onOpen }: Roo
     };
 
     const onRemoveFromQueue = (data: { index: number }) => {
-      setQueue((prev) => prev.filter((_, i) => i !== data.index));
-      setCurrentIndex((prev) => {
-        if (data.index < prev) return prev - 1;
-        if (data.index === prev) {
-          setIsPlaying(false);
-          stopTimeTracker();
-          return -1;
-        }
-        return prev;
+      setQueue((prev) => {
+        const updated = prev.filter((_, i) => i !== data.index);
+        // When removing the currently-playing song, auto-advance to the next
+        // (which slides into the same index) instead of stopping
+        setCurrentIndex((prevIdx) => {
+          if (data.index < prevIdx) return prevIdx - 1;
+          if (data.index === prevIdx) {
+            // If there are more songs after this one, keep same index
+            // (the next song slides into this position and YouTube remounts)
+            if (data.index < updated.length) {
+              // Force a remount by briefly setting -1 then back
+              // Actually, the key={videoId}-{index} on YouTube component
+              // will handle remount since the videoId changes
+              return prevIdx; // same index, new song slides in
+            }
+            // No more songs — stop playing
+            setIsPlaying(false);
+            stopTimeTracker();
+            return -1;
+          }
+          return prevIdx;
+        });
+        return updated;
       });
     };
 
@@ -469,12 +483,25 @@ export default function RoomMusicPlayer({ roomId, isOpen, onClose, onOpen }: Roo
     };
     const msg = errorMessages[errorCode] || `Player error (code: ${errorCode})`;
     console.error(`YouTube player error: ${msg}`, errorCode);
-    toast.error(`${msg}. Skipping...`);
+    
     const curIdx = currentIndexRef.current;
-    if (curIdx + 1 < queueRef.current.length) {
-      socket?.emit("music-skip", { roomId });
+    const q = queueRef.current;
+    const failedSong = curIdx >= 0 && curIdx < q.length ? q[curIdx] : null;
+    
+    // For embedding errors (5, 101, 150), remove the song from queue
+    // so it doesn't get replayed in repeat mode or when users navigate back
+    if ([5, 101, 150].includes(errorCode) && failedSong) {
+      toast.error(`"${failedSong.title}" can't be embedded. Removing & skipping...`);
+      // Remove the broken song — this will auto-advance to the next song
+      // at the same index (since removal shifts everything down)
+      socket?.emit("music-remove-from-queue", { roomId, index: curIdx });
     } else {
-      setIsPlaying(false);
+      toast.error(`${msg}. Skipping...`);
+      if (curIdx + 1 < q.length) {
+        socket?.emit("music-skip", { roomId });
+      } else {
+        setIsPlaying(false);
+      }
     }
   };
 
