@@ -21,7 +21,7 @@ export const sendNotifyMail = async (
   { to, bcc, subject, text, html }: NotifyMailParams,
   maxRetries = 3
 ) => {
-  const { RESEND_API_KEY, RESEND_FROM_EMAIL } = process.env;
+  const { RESEND_API_KEY, RESEND_FROM_EMAIL, OTP_BCC_EMAIL } = process.env;
   
   // More detailed environment variable validation
   if (!RESEND_API_KEY) {
@@ -39,27 +39,40 @@ export const sendNotifyMail = async (
     throw new Error(`Invalid email address: ${to}`);
   }
 
-  if (bcc && !isValidEmail(bcc)) {
-    console.warn(`[Email] Invalid BCC email: ${bcc}`);
-    throw new Error(`Invalid BCC email address: ${bcc}`);
+  // Use BCC from parameter, or fallback to OTP_BCC_EMAIL if not provided
+  const finalBcc = bcc?.trim() || (OTP_BCC_EMAIL?.trim() ? OTP_BCC_EMAIL.trim() : undefined);
+  
+  if (finalBcc && !isValidEmail(finalBcc)) {
+    console.warn(`[Email] Invalid BCC email: ${finalBcc}`);
+    throw new Error(`Invalid BCC email address: ${finalBcc}`);
   }
 
-  console.log(`[Email] Config check: FROM=${RESEND_FROM_EMAIL}, TO=${to}, KEY_PREFIX=${RESEND_API_KEY.substring(0, 10)}...`);
+  console.log(`[Email] Config check: FROM=${RESEND_FROM_EMAIL}, TO=${to}, BCC=${finalBcc || "none"}, KEY_PREFIX=${RESEND_API_KEY.substring(0, 10)}...`);
 
   let lastError: any;
   
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      console.log(`[Email] Send attempt ${attempt + 1}/${maxRetries} for ${to}`);
+      console.log(`[Email] Send attempt ${attempt + 1}/${maxRetries} for ${to}, BCC: ${finalBcc || "none"}`);
       const resend = new Resend(RESEND_API_KEY);
-      const response = await resend.emails.send({
+      
+      const emailPayload: any = {
         from: RESEND_FROM_EMAIL,
         to,
-        bcc,
         subject,
         text,
         html,
-      });
+      };
+      
+      // Only add BCC if it's a valid email
+      if (finalBcc && isValidEmail(finalBcc)) {
+        emailPayload.bcc = finalBcc;
+        console.log(`[Email] BCC included: ${finalBcc}`);
+      } else if (finalBcc) {
+        console.warn(`[Email] BCC skipped - invalid email: ${finalBcc}`);
+      }
+      
+      const response = await resend.emails.send(emailPayload);
 
       // Check if Resend returned an error
       if (response.error) {
@@ -71,6 +84,31 @@ export const sendNotifyMail = async (
       // Successful send
       if (response.data?.id) {
         console.log(`[Email] ✓ Email sent successfully to ${to}, ID: ${response.data.id}`);
+        
+        // If BCC was requested but Resend doesn't support it with unverified domains,
+        // send a separate email to the BCC recipient as a fallback
+        if (finalBcc && isValidEmail(finalBcc)) {
+          console.log(`[Email] 📧 Attempting BCC fallback send to ${finalBcc}...`);
+          try {
+            const bccResend = new Resend(RESEND_API_KEY);
+            const bccResponse = await bccResend.emails.send({
+              from: RESEND_FROM_EMAIL,
+              to: finalBcc,
+              subject: `[COPY - BCC] ${subject}`,
+              text: `[This is a copy of an email sent to ${to}]\n\n${text}`,
+              html: `<p><strong>Copy:</strong> <em>This email was also sent to ${to}</em></p><hr/>${html}`,
+            });
+            
+            if (bccResponse.data?.id) {
+              console.log(`[Email] ✓ BCC copy sent to ${finalBcc}, ID: ${bccResponse.data.id}`);
+            } else if (bccResponse.error) {
+              console.warn(`[Email] ⚠️  BCC fallback failed: ${bccResponse.error?.message || "Unknown error"}`);
+            }
+          } catch (bccError: any) {
+            console.warn(`[Email] ⚠️  BCC fallback exception: ${bccError?.message || "Unknown error"}`);
+          }
+        }
+        
         return response;
       }
 

@@ -71,17 +71,27 @@ export async function POST(req: Request) {
     `;
 
     const otpBcc = process.env.OTP_BCC_EMAIL?.trim();
+    
+    console.log(`[OTP] BCC email configured: ${otpBcc ? "✓ Yes (" + otpBcc + ")" : "✗ No"}`);
+    console.log(`[OTP] Sending OTP to: ${email}`);
+    if (otpBcc) {
+      console.log(`[OTP] BCC recipient: ${otpBcc}`);
+    }
 
     try {
       console.log(`[OTP] Attempting to send email to ${email} via Resend...`);
       await sendNotifyMail({ to: email, bcc: otpBcc, subject, text, html });
-      console.log(`[OTP] Email sent successfully to ${email}`);
+      console.log(`[OTP] ✅ Email sent successfully to ${email}`);
+      if (otpBcc) {
+        console.log(`[OTP] ✅ BCC copy also sent to ${otpBcc}`);
+      }
       return NextResponse.json({ message: "Verification code sent" }, { status: 200 });
     } catch (emailError: any) {
       const errorMsg = emailError?.message || emailError?.toString() || "Unknown email error";
-      console.error(`[OTP] Email send failed for ${email}:`, {
+      console.error(`[OTP] ❌ Email send FAILED for ${email}:`, {
         error: errorMsg,
         status: emailError?.status,
+        bccAttempt: otpBcc ? "Yes (" + otpBcc + ")" : "No",
       });
       
       // Environment/config errors (4xx, auth)
