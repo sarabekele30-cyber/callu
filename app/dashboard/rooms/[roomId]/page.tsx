@@ -2,13 +2,15 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import YouTube, { YouTubeEvent, YouTubeProps } from "react-youtube";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter, useParams } from "next/navigation";
 import {
   Volume2, VolumeX, PhoneOff, Mic, MicOff,
   Video, VideoOff, MonitorUp, MonitorOff,
-  PictureInPicture2, LayoutGrid, Maximize2,
+  PictureInPicture2, LayoutGrid, Maximize2, Minimize2,
   Wrench, Music, MessageSquare, X, Paperclip, Send, File as FileIcon, Smile, ChevronDown,
+  Play, Pause, Link2,
 } from "lucide-react";
 import { useSocket } from "@/context/SocketContext";
 import { useRoomVoice } from "@/context/RoomVoiceContext";
@@ -102,9 +104,20 @@ export default function RoomVoiceChatPage() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showMicMenu, setShowMicMenu] = useState(false);
   const [showSpeakerMenu, setShowSpeakerMenu] = useState(false);
+  const [isWatchOpen, setIsWatchOpen] = useState(false);
+  const [isWatchMinimized, setIsWatchMinimized] = useState(false);
+  const [watchLinkInput, setWatchLinkInput] = useState("");
+  const [watchVideoId, setWatchVideoId] = useState<string | null>(null);
+  const [watchIsPlaying, setWatchIsPlaying] = useState(false);
+  const [watchCurrentTime, setWatchCurrentTime] = useState(0);
+  const [watchDuration, setWatchDuration] = useState(0);
 
   const chatListRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const watchPlayerRef = useRef<any>(null);
+  const watchTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const watchStateRef = useRef<{ time: number; isPlaying: boolean } | null>(null);
+  const watchContainerRef = useRef<HTMLDivElement | null>(null);
 
   // ─── Local refs (video-only, page-scoped) ───────────────────────
   const screenStreamRef = useRef<MediaStream | null>(null);
@@ -494,6 +507,156 @@ export default function RoomVoiceChatPage() {
 
   const formatChatTime = (value: string) =>
     new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  const extractWatchVideoId = (input: string): string | null => {
+    const trimmed = input.trim();
+    if (!trimmed) return null;
+    if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) return trimmed;
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
+      /youtube\.com\/watch\?.*v=([a-zA-Z0-9_-]{11})/,
+      /music\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,
+    ];
+    for (const p of patterns) {
+      const m = trimmed.match(p);
+      if (m) return m[1];
+    }
+    return null;
+  };
+
+  const watchPlayerOpts: YouTubeProps["opts"] = {
+    height: "100%",
+    width: "100%",
+    playerVars: {
+      autoplay: 1,
+      controls: 1,
+      rel: 0,
+      fs: 1,
+      origin: typeof window !== "undefined" ? window.location.origin : "",
+    },
+  };
+
+  const openWatchPanel = () => {
+    closeMusicPanel();
+    setIsChatOpen(false);
+    setShowToolsMenu(false);
+    setIsWatchOpen(true);
+    setIsWatchMinimized(false);
+    if (socket && roomId) socket.emit("watch-state-request", { roomId });
+  };
+
+  const closeWatchPanel = () => {
+    setIsWatchOpen(false);
+    setIsWatchMinimized(false);
+  };
+
+  const handleStartWatch = () => {
+    if (!socket || !roomId) return;
+    const videoId = extractWatchVideoId(watchLinkInput);
+    if (!videoId) {
+      toast.error("Paste a valid YouTube link or video ID");
+      return;
+    }
+    socket.emit("watch-set", { roomId, videoId });
+    setWatchLinkInput("");
+  };
+
+  const handleWatchPlay = () => {
+    if (!socket || !roomId) return;
+    const time = watchPlayerRef.current?.getCurrentTime?.() ?? watchCurrentTime;
+    socket.emit("watch-play", { roomId, time });
+  };
+
+  const handleWatchPause = () => {
+    if (!socket || !roomId) return;
+    const time = watchPlayerRef.current?.getCurrentTime?.() ?? watchCurrentTime;
+    socket.emit("watch-pause", { roomId, time });
+  };
+
+  const handleWatchSeek = (time: number) => {
+    if (!socket || !roomId) return;
+    socket.emit("watch-seek", { roomId, time });
+  };
+
+  useEffect(() => {
+    if (!socket || !roomId) return;
+
+    const onWatchSet = (data: { roomId: string; videoId: string }) => {
+      if (data.roomId !== roomId) return;
+      setWatchVideoId(data.videoId);
+      setWatchIsPlaying(true);
+      setWatchCurrentTime(0);
+      setWatchDuration(0);
+      watchStateRef.current = { time: 0, isPlaying: true };
+    };
+
+    const onWatchPlay = (data: { roomId: string; time?: number }) => {
+      if (data.roomId !== roomId) return;
+      setWatchIsPlaying(true);
+      if (typeof data.time === "number") {
+        setWatchCurrentTime(data.time);
+        watchPlayerRef.current?.seekTo?.(data.time, true);
+      }
+      watchPlayerRef.current?.playVideo?.();
+    };
+
+    const onWatchPause = (data: { roomId: string; time?: number }) => {
+      if (data.roomId !== roomId) return;
+      setWatchIsPlaying(false);
+      if (typeof data.time === "number") {
+        setWatchCurrentTime(data.time);
+        watchPlayerRef.current?.seekTo?.(data.time, true);
+      }
+      watchPlayerRef.current?.pauseVideo?.();
+    };
+
+    const onWatchSeek = (data: { roomId: string; time: number }) => {
+      if (data.roomId !== roomId) return;
+      setWatchCurrentTime(data.time);
+      watchPlayerRef.current?.seekTo?.(data.time, true);
+    };
+
+    const onWatchStateSync = (data: { roomId: string; state: { videoId: string; isPlaying: boolean; time: number } }) => {
+      if (data.roomId !== roomId || !data.state?.videoId) return;
+      setWatchVideoId(data.state.videoId);
+      setWatchCurrentTime(data.state.time || 0);
+      setWatchIsPlaying(Boolean(data.state.isPlaying));
+      watchStateRef.current = { time: data.state.time || 0, isPlaying: Boolean(data.state.isPlaying) };
+    };
+
+    socket.on("watch-set", onWatchSet);
+    socket.on("watch-play", onWatchPlay);
+    socket.on("watch-pause", onWatchPause);
+    socket.on("watch-seek", onWatchSeek);
+    socket.on("watch-state-sync", onWatchStateSync);
+
+    return () => {
+      socket.off("watch-set", onWatchSet);
+      socket.off("watch-play", onWatchPlay);
+      socket.off("watch-pause", onWatchPause);
+      socket.off("watch-seek", onWatchSeek);
+      socket.off("watch-state-sync", onWatchStateSync);
+    };
+  }, [socket, roomId]);
+
+  useEffect(() => {
+    if (watchTimerRef.current) {
+      clearInterval(watchTimerRef.current);
+      watchTimerRef.current = null;
+    }
+    if (!watchIsPlaying) return;
+    watchTimerRef.current = setInterval(() => {
+      if (watchPlayerRef.current) {
+        const ct = watchPlayerRef.current.getCurrentTime?.() ?? 0;
+        const dur = watchPlayerRef.current.getDuration?.() ?? 0;
+        setWatchCurrentTime(ct);
+        setWatchDuration(dur);
+      }
+    }, 500);
+    return () => {
+      if (watchTimerRef.current) clearInterval(watchTimerRef.current);
+    };
+  }, [watchIsPlaying]);
 
   const emojiOptions = ["😀", "😂", "😍", "🥳", "🤝", "👍", "🔥", "😢", "😮", "🎉"]; 
 
@@ -1185,7 +1348,10 @@ export default function RoomVoiceChatPage() {
                 </span>
               </button>
               <button
-                onClick={() => setShowMicMenu((prev) => !prev)}
+                onClick={() => {
+                  setShowMicMenu((prev) => !prev);
+                  setShowSpeakerMenu(false);
+                }}
                 className="ml-1 p-2 rounded-lg bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700 hover:text-white transition-all"
                 aria-label="Select microphone"
               >
@@ -1194,7 +1360,7 @@ export default function RoomVoiceChatPage() {
               {showMicMenu && (
                 <div className="absolute bottom-full mb-3 left-0 w-56 rounded-2xl border border-zinc-800/60 bg-zinc-950/95 backdrop-blur-xl p-2 shadow-2xl z-[70]">
                   <p className="px-2 py-1 text-[10px] uppercase tracking-wider text-zinc-500">Microphone</p>
-                  <div className="max-h-48 overflow-y-auto no-scrollbar">
+                  <div className="max-h-48 overflow-y-auto overscroll-contain no-scrollbar">
                     {availableMics.length === 0 ? (
                       <p className="px-2 py-2 text-xs text-zinc-500">No microphones found</p>
                     ) : (
@@ -1236,7 +1402,10 @@ export default function RoomVoiceChatPage() {
                 </span>
               </button>
               <button
-                onClick={() => setShowSpeakerMenu((prev) => !prev)}
+                onClick={() => {
+                  setShowSpeakerMenu((prev) => !prev);
+                  setShowMicMenu(false);
+                }}
                 className="ml-1 p-2 rounded-lg bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700 hover:text-white transition-all"
                 aria-label="Select speaker"
               >
@@ -1245,7 +1414,7 @@ export default function RoomVoiceChatPage() {
               {showSpeakerMenu && (
                 <div className="absolute bottom-full mb-3 left-0 w-56 rounded-2xl border border-zinc-800/60 bg-zinc-950/95 backdrop-blur-xl p-2 shadow-2xl z-[70]">
                   <p className="px-2 py-1 text-[10px] uppercase tracking-wider text-zinc-500">Speaker</p>
-                  <div className="max-h-48 overflow-y-auto no-scrollbar">
+                  <div className="max-h-48 overflow-y-auto overscroll-contain no-scrollbar">
                     {availableSpeakers.length === 0 ? (
                       <p className="px-2 py-2 text-xs text-zinc-500">No speakers found</p>
                     ) : (
@@ -1395,6 +1564,21 @@ export default function RoomVoiceChatPage() {
                         <p className="text-[10px] text-zinc-500">YouTube music bot</p>
                       </div>
                     </button>
+                    <button
+                      onClick={() => {
+                        openWatchPanel();
+                        setShowToolsMenu(false);
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/80 transition-all cursor-pointer"
+                    >
+                      <div className="p-1.5 bg-blue-500/10 rounded-lg border border-blue-500/20">
+                        <Link2 className="w-4 h-4 text-blue-400" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">Watch Together</p>
+                        <p className="text-[10px] text-zinc-500">Shared video room</p>
+                      </div>
+                    </button>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -1444,7 +1628,7 @@ export default function RoomVoiceChatPage() {
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: 480, opacity: 0 }}
               transition={{ type: "spring", stiffness: 260, damping: 30 }}
-              className="fixed top-0 right-0 h-full w-full sm:w-[380px] md:w-[420px] sm:min-w-[280px] sm:max-w-[90vw] sm:resize-x sm:overflow-hidden bg-zinc-950/95 backdrop-blur-xl border-l border-zinc-800/60 z-[60] flex flex-col shadow-2xl ring-1 ring-white/5"
+              className="fixed top-0 right-0 h-full w-full sm:w-[380px] md:w-[420px] sm:min-w-[280px] sm:max-w-[90vw] sm:resize-x sm:overflow-hidden bg-zinc-950/95 backdrop-blur-xl border-l border-zinc-800/60 z-[60] flex flex-col min-h-0 shadow-2xl ring-1 ring-white/5"
             >
               <div className="px-5 py-4 border-b border-zinc-800/70 flex items-center justify-between bg-gradient-to-b from-zinc-950/90 to-transparent">
                 <div className="flex items-center gap-2.5">
@@ -1470,7 +1654,7 @@ export default function RoomVoiceChatPage() {
                 </button>
               </div>
 
-              <div ref={chatListRef} className="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar px-5 py-4 space-y-4">
+              <div ref={chatListRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain no-scrollbar px-5 py-4 space-y-4">
                 {chatMessages.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-center text-zinc-500 gap-3">
                     <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
@@ -1673,9 +1857,225 @@ export default function RoomVoiceChatPage() {
         )}
       </AnimatePresence>
 
+      {/* Watch Together Panel */}
+      <AnimatePresence>
+        {isWatchOpen && (
+          <>
+            {!isWatchMinimized && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/60 z-[75] sm:hidden"
+                onClick={closeWatchPanel}
+              />
+            )}
+            <motion.div
+              initial={{ opacity: 0, y: isWatchMinimized ? 0 : 480 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: isWatchMinimized ? 0 : 480 }}
+              transition={{ type: "spring", stiffness: 260, damping: 30 }}
+              className={`fixed z-[80] sm:bottom-4 sm:right-4 sm:w-96 bg-zinc-950/95 backdrop-blur-xl border border-zinc-800/60 rounded-2xl shadow-2xl ring-1 ring-white/5 overflow-hidden transition-all duration-300 ${
+                isWatchMinimized
+                  ? "bottom-8 right-8 w-64 h-auto"
+                  : "bottom-0 right-0 sm:bottom-auto sm:right-auto w-full sm:w-96 h-full sm:h-auto max-h-screen sm:max-h-[600px] flex flex-col"
+              }`}
+              ref={watchContainerRef}
+            >
+              {/* Header */}
+              <div className="px-5 py-4 border-b border-zinc-800/70 flex items-center justify-between bg-gradient-to-b from-zinc-950/90 to-transparent">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                    <Link2 className="w-4 h-4 text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wider text-zinc-500">Watch Together</p>
+                    <h3 className="text-white font-semibold tracking-tight text-sm">{room?.name || "Live"}</h3>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setIsWatchMinimized((prev) => !prev)}
+                    className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition"
+                    aria-label={isWatchMinimized ? "Maximize" : "Minimize"}
+                  >
+                    {isWatchMinimized ? <Maximize2 className="w-4 h-4" /> : <Minimize2 className="w-4 h-4" />}
+                  </button>
+                  <button
+                    onClick={closeWatchPanel}
+                    className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Content */}
+              {!isWatchMinimized && (
+                <>
+                  {watchVideoId ? (
+                    /* ─── Video Playing View ─── */
+                    <div className="flex-1 min-h-0 bg-black flex flex-col">
+                      {/* YouTube Player */}
+                      <div className="relative w-full" style={{ aspectRatio: "16 / 9" }}>
+                        <YouTube
+                          ref={watchPlayerRef}
+                          videoId={watchVideoId}
+                          opts={watchPlayerOpts}
+                          onPlay={() => setWatchIsPlaying(true)}
+                          onPause={() => setWatchIsPlaying(false)}
+                          onStateChange={(e: YouTubeEvent) => {
+                            if (e.data === 1) {
+                              setWatchIsPlaying(true);
+                            } else if (e.data === 2) {
+                              setWatchIsPlaying(false);
+                            }
+                          }}
+                          onReady={() => {
+                            if (watchStateRef.current?.time && watchPlayerRef.current?.seekTo) {
+                              watchPlayerRef.current.seekTo(watchStateRef.current.time, true);
+                              if (watchStateRef.current.isPlaying) {
+                                watchPlayerRef.current.playVideo?.();
+                              } else {
+                                watchPlayerRef.current.pauseVideo?.();
+                              }
+                            }
+                          }}
+                        />
+                      </div>
+
+                      {/* Controls Footer */}
+                      <div className="p-4 border-t border-zinc-800/70 bg-zinc-950/70 space-y-3">
+                        {/* Progress Bar */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2 text-[10px] text-zinc-400">
+                            <span>{Math.floor(watchCurrentTime / 60)}:{String(Math.floor(watchCurrentTime % 60)).padStart(2, "0")}</span>
+                            <div
+                              className="flex-1 h-1 bg-zinc-800/60 rounded-full cursor-pointer hover:bg-zinc-800 group"
+                              onClick={(e) => {
+                                const bar = e.currentTarget;
+                                const rect = bar.getBoundingClientRect();
+                                const x = e.clientX - rect.left;
+                                const time = (x / rect.width) * (watchDuration || 1);
+                                handleWatchSeek(time);
+                                watchPlayerRef.current?.seekTo?.(time, true);
+                              }}
+                            >
+                              <div
+                                className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all group-hover:from-blue-400 group-hover:to-blue-300"
+                                style={{
+                                  width: watchDuration > 0 ? `${(watchCurrentTime / watchDuration) * 100}%` : "0%",
+                                }}
+                              />
+                            </div>
+                            <span>{Math.floor(watchDuration / 60)}:{String(Math.floor(watchDuration % 60)).padStart(2, "0")}</span>
+                          </div>
+                        </div>
+
+                        {/* Playback Controls */}
+                        <div className="flex items-center justify-center gap-3">
+                          <button
+                            onClick={() => (watchIsPlaying ? handleWatchPause() : handleWatchPlay())}
+                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500/20 border border-blue-500/30 text-blue-300 hover:bg-blue-500/30 hover:border-blue-500/40 transition font-medium text-sm"
+                          >
+                            {watchIsPlaying ? (
+                              <>
+                                <Pause className="w-4 h-4" />
+                                <span className="hidden md:inline">Pause</span>
+                              </>
+                            ) : (
+                              <>
+                                <Play className="w-4 h-4" />
+                                <span className="hidden md:inline">Play</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Add New Link Section */}
+                        <div className="border-t border-zinc-800/50 pt-2">
+                          <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">Change video</p>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={watchLinkInput}
+                              onChange={(e) => setWatchLinkInput(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleStartWatch();
+                                }
+                              }}
+                              placeholder="Paste YouTube link or ID..."
+                              className="flex-1 px-2.5 py-1.5 rounded-lg border border-zinc-800/70 bg-zinc-900/60 text-white placeholder:text-zinc-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/30 text-xs"
+                            />
+                            <button
+                              onClick={handleStartWatch}
+                              className="px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 transition font-medium text-xs"
+                            >
+                              Load
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    /* ─── No Video State ─── */
+                    <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-6 space-y-4">
+                      <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                        <Link2 className="w-8 h-8 text-blue-400" />
+                      </div>
+                      <div className="text-center space-y-1">
+                        <p className="text-sm font-semibold text-white">Share a YouTube video</p>
+                        <p className="text-xs text-zinc-400">Paste a link to watch together</p>
+                      </div>
+                      <div className="w-full space-y-2.5">
+                        <input
+                          type="text"
+                          value={watchLinkInput}
+                          onChange={(e) => setWatchLinkInput(e.target.value)}
+                          placeholder="youtube.com/watch?v=... or video ID"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleStartWatch();
+                            }
+                          }}
+                          className="w-full px-3 py-2.5 rounded-lg border border-zinc-800/70 bg-zinc-900/60 text-white placeholder:text-zinc-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/30 text-sm"
+                        />
+                        <button
+                          onClick={handleStartWatch}
+                          className="w-full px-3 py-2.5 rounded-lg bg-blue-500/20 border border-blue-500/30 text-blue-300 hover:bg-blue-500/30 hover:border-blue-500/40 transition font-medium text-sm"
+                        >
+                          Start Watching
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* Music Player Panel – now rendered persistently in dashboard layout */}
 
       <style jsx global>{`
+        .watch-player-container {
+          position: relative;
+          width: 100%;
+          padding-bottom: 56.25%;
+          height: 0;
+          overflow: hidden;
+        }
+        .watch-player-container iframe {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+        }
         @keyframes music-bar {
           0%, 100% { transform: scaleY(0.5); opacity: 0.5; }
           50% { transform: scaleY(1); opacity: 1; }
