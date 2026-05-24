@@ -1,0 +1,31 @@
+appId: com.callu.desktop
+productName: Callu
+directories:
+  output: release
+asar: true
+asarUnpack:
+  - node_modules/uiohook-napi/**
+files:
+  - dist/**
+  - electron/dist/**
+win:
+  target: nsis
+  requestedExecutionLevel: asInvoker
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Network
+publish:
+  provider: github
+  owner: Sahnik0
+  repo: callu
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  runAfterFinish: true
+  differentialPackage: false
+

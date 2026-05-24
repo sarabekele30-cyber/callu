@@ -3,7 +3,7 @@ import dbConnect from "@/lib/db";
 import User from "@/models/User";
 import { sendNotifyMail } from "@/lib/notifyMail";
 
-const APP_URL = process.env.NEXT_PUBLIC_URL || "https://callu.onrender.com/";
+const APP_URL = process.env.NEXT_PUBLIC_URL || "https://callu-production.up.railway.app/";
 
 export async function POST(req: Request) {
   try {

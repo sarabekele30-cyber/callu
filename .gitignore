@@ -41,3 +41,13 @@ yarn-error.log*
 next-env.d.ts
 # compiled server
 server.js
+
+# callu-desktop specific ignores
+/callu-desktop/node_modules/
+/callu-desktop/dist/
+/callu-desktop/release/
+/callu-desktop/electron/dist/
+/callu-desktop/.env
+/callu-desktop/.env.production
+/callu-desktop/.env.local
+/callu-desktop/node_modules
