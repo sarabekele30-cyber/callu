@@ -502,13 +502,6 @@ export default function RoomVoiceChatPage() {
       disconnectMusic(); // Stop music from old room
     }
 
-    // Refresh protection: no join-intent flag → kick to dashboard
-    const joinIntent = sessionStorage.getItem("room-join-intent");
-    if (!joinIntent) {
-      router.replace("/dashboard/members");
-      return;
-    }
-    sessionStorage.removeItem("room-join-intent");
 
     const init = async () => {
       const roomData = await fetchRoomDetails();
@@ -1562,6 +1555,8 @@ export default function RoomVoiceChatPage() {
             {/* Mic */}
             <div className="relative flex items-center">
               <button
+                tabIndex={-1}
+                onFocus={(e) => e.currentTarget.blur()}
                 onClick={(e) => {
                   e.currentTarget.blur();
                   toggleMute();
@@ -1578,6 +1573,8 @@ export default function RoomVoiceChatPage() {
                 </span>
               </button>
               <button
+                tabIndex={-1}
+                onFocus={(e) => e.currentTarget.blur()}
                 onClick={(e) => {
                   e.currentTarget.blur();
                   setShowMicMenu((prev) => !prev);
@@ -1598,6 +1595,8 @@ export default function RoomVoiceChatPage() {
                       availableMics.map((mic, index) => (
                         <button
                           key={mic.deviceId}
+                          tabIndex={-1}
+                          onFocus={(e) => e.currentTarget.blur()}
                           onClick={(e) => {
                             e.currentTarget.blur();
                             if (typeof document !== "undefined") {
@@ -1620,12 +1619,15 @@ export default function RoomVoiceChatPage() {
                   {/* PTT Toggle */}
                   <div className="border-t border-zinc-800/60 mt-1 pt-1">
                     <button
+                      tabIndex={-1}
+                      onFocus={(e) => e.currentTarget.blur()}
                       onClick={(e) => {
                         e.currentTarget.blur();
                         if (typeof document !== "undefined") {
                           (document.activeElement as HTMLElement)?.blur();
                         }
                         setIsPTTEnabled(!isPTTEnabled);
+                        setShowMicMenu(false); // Close dropdown immediately!
                       }}
                       className={`w-full flex items-center justify-between px-2 py-2 rounded-lg text-xs transition cursor-pointer ${
                         isPTTEnabled
@@ -1650,6 +1652,8 @@ export default function RoomVoiceChatPage() {
             {/* Deafen */}
             <div className="relative flex items-center">
               <button
+                tabIndex={-1}
+                onFocus={(e) => e.currentTarget.blur()}
                 onClick={toggleDeafen}
                 className={`p-3 md:p-3.5 rounded-xl transition-all duration-200 group relative cursor-pointer ${
                   isDeafened
@@ -1663,6 +1667,8 @@ export default function RoomVoiceChatPage() {
                 </span>
               </button>
               <button
+                tabIndex={-1}
+                onFocus={(e) => e.currentTarget.blur()}
                 onClick={() => {
                   setShowSpeakerMenu((prev) => !prev);
                   setShowMicMenu(false);
@@ -1682,6 +1688,8 @@ export default function RoomVoiceChatPage() {
                       availableSpeakers.map((speaker, index) => (
                         <button
                           key={speaker.deviceId}
+                          tabIndex={-1}
+                          onFocus={(e) => e.currentTarget.blur()}
                           onClick={() => {
                             void setSpeakerDevice(speaker.deviceId);
                             setShowSpeakerMenu(false);
@@ -1705,6 +1713,8 @@ export default function RoomVoiceChatPage() {
 
             {/* Camera */}
             <button
+              tabIndex={-1}
+              onFocus={(e) => e.currentTarget.blur()}
               onClick={() => void toggleCamera()}
               className={`p-3 md:p-3.5 rounded-xl transition-all duration-200 group relative cursor-pointer ${
                 isVideoOn && !isScreenSharing
@@ -1720,6 +1730,8 @@ export default function RoomVoiceChatPage() {
 
             {/* Screen Share */}
             <button
+              tabIndex={-1}
+              onFocus={(e) => e.currentTarget.blur()}
               onClick={() => void toggleScreenShare()}
               className={`p-3 md:p-3.5 rounded-xl transition-all duration-200 group relative cursor-pointer ${
                 isScreenSharing
@@ -1736,6 +1748,8 @@ export default function RoomVoiceChatPage() {
             {/* PiP */}
             {participants.some((p) => p.isVideoOn && p.userId !== user?._id) && (
               <button
+                tabIndex={-1}
+                onFocus={(e) => e.currentTarget.blur()}
                 onClick={() => void togglePiP()}
                 className={`p-3 md:p-3.5 rounded-xl transition-all duration-200 group relative cursor-pointer ${
                   isInPiP
@@ -1754,6 +1768,8 @@ export default function RoomVoiceChatPage() {
 
             {/* Layout toggle (hidden on mobile) */}
             <button
+              tabIndex={-1}
+              onFocus={(e) => e.currentTarget.blur()}
               onClick={() => setLayout((l) => (l === "grid" ? "spotlight" : "grid"))}
               className="hidden sm:block p-3 md:p-3.5 rounded-xl bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700 hover:text-white transition-all duration-200 group relative cursor-pointer"
             >
@@ -1765,6 +1781,8 @@ export default function RoomVoiceChatPage() {
 
             {/* Chat (mobile) */}
             <button
+              tabIndex={-1}
+              onFocus={(e) => e.currentTarget.blur()}
               onClick={() => (isChatOpen ? setIsChatOpen(false) : openChatPanel())}
               className={`sm:hidden p-3 md:p-3.5 rounded-xl transition-all duration-200 group relative cursor-pointer ${
                 isChatOpen
@@ -1786,6 +1804,8 @@ export default function RoomVoiceChatPage() {
             {/* Tools */}
             <div className="relative">
               <button
+                tabIndex={-1}
+                onFocus={(e) => e.currentTarget.blur()}
                 onClick={() => setShowToolsMenu(!showToolsMenu)}
                 className={`p-3 md:p-3.5 rounded-xl transition-all duration-200 group relative cursor-pointer ${
                   isMusicOpen
@@ -1810,6 +1830,8 @@ export default function RoomVoiceChatPage() {
                     className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 w-52 bg-zinc-900/95 backdrop-blur-xl border border-zinc-800/50 rounded-2xl p-2 shadow-2xl ring-1 ring-white/5 z-[60]"
                   >
                     <button
+                      tabIndex={-1}
+                      onFocus={(e) => e.currentTarget.blur()}
                       onClick={() => {
                         openMusicPlayer(roomId);
                         setIsChatOpen(false);
@@ -1834,6 +1856,8 @@ export default function RoomVoiceChatPage() {
 
             {/* Leave */}
             <button
+              tabIndex={-1}
+              onFocus={(e) => e.currentTarget.blur()}
               onClick={leaveRoom}
               className="p-3 md:p-3.5 rounded-xl bg-red-600 hover:bg-red-500 text-white transition-all shadow-lg shadow-red-900/20 group relative cursor-pointer"
             >

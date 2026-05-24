@@ -1006,8 +1006,12 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
     console.log("[RoomVoiceContext] user:", userRef.current);
 
     if (isVoiceConnectedRef.current) {
-      console.warn("[RoomVoiceContext] Already connected to voice.");
-      return false;
+      if (voiceRoomIdRef.current === roomId) {
+        console.log("[RoomVoiceContext] Already connected to this voice room.");
+        return true;
+      }
+      console.warn("[RoomVoiceContext] Already connected to a different voice room. Leaving first.");
+      leaveVoice();
     }
     const s = socketRef.current;
     const u = userRef.current;
