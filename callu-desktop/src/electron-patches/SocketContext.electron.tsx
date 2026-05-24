@@ -24,11 +24,17 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       console.log(`[Socket] Connecting to server at ${serverUrl}`);
       const newSocket = io(serverUrl, {
         path: "/socket.io",
+        transports: ["websocket"],
       });
 
       newSocket.on("connect", () => {
+        console.log("[Socket] Connected successfully, identifying user...");
         setIsSocketConnected(true);
         newSocket.emit("identify", user._id);
+      });
+
+      newSocket.on("connect_error", (error) => {
+        console.error("[Socket] Connection error:", error);
       });
 
       newSocket.on("online-users-list", (users: string[]) => {

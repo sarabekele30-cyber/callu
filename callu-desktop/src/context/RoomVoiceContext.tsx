@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useRef, useEffect, MutableRefObject } from "react";
 import { useAuth } from "./AuthContext";
-import { useSocket } from "./SocketContext";
+import { useSocket } from "@/context/SocketContext";
 import { useCall } from "./CallContext";
 import { toast } from "sonner";
 
@@ -330,8 +330,9 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
       const u = userRef.current;
       const s = socketRef.current;
       if (u && rid) {
+        const baseUrl = import.meta.env.VITE_API_URL || "https://callu-production.up.railway.app";
         navigator.sendBeacon(
-          "/api/rooms/leave",
+          `${baseUrl}/api/rooms/leave`,
           new Blob([JSON.stringify({ roomId: rid, userId: u._id })], { type: "application/json" })
         );
       }
