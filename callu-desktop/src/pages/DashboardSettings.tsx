@@ -30,14 +30,60 @@ export default function SettingsPage() {
   const [email, setEmail] = useState(user?.email || "");
   const [mobile, setMobile] = useState(user?.mobile || "");
 
-  // Notification settings
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [callNotifications, setCallNotifications] = useState(true);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  // Premium Avatar configuration selection
+  const [selectedAvatar, setSelectedAvatar] = useState(user?.avatarConfig?.image || "");
+  const [selectedColor, setSelectedColor] = useState(user?.avatarConfig?.color || "#27272a");
+  const [avatarFolder, setAvatarFolder] = useState("vibrant");
 
-  // Privacy settings
-  const [profileVisibility, setProfileVisibility] = useState<"everyone" | "members" | "private">("members");
-  const [showOnlineStatus, setShowOnlineStatus] = useState(true);
+  const avatarCounts: Record<string, number> = {
+    vibrant: 20,
+    "3d": 5,
+    bluey: 10,
+    memo: 20,
+    notion: 10,
+    teams: 5,
+    toons: 7,
+    upstream: 5
+  };
+
+  // Notification settings (Persist to LocalStorage)
+  const [emailNotifications, setEmailNotifications] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("setting_email_notifications");
+      return saved !== null ? JSON.parse(saved) : true;
+    }
+    return true;
+  });
+  const [callNotifications, setCallNotifications] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("setting_call_notifications");
+      return saved !== null ? JSON.parse(saved) : true;
+    }
+    return true;
+  });
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("setting_sound_enabled");
+      return saved !== null ? JSON.parse(saved) : true;
+    }
+    return true;
+  });
+
+  // Privacy settings (Persist to LocalStorage)
+  const [profileVisibility, setProfileVisibility] = useState<"everyone" | "members" | "private">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("setting_profile_visibility");
+      return (saved as any) || "members";
+    }
+    return "members";
+  });
+  const [showOnlineStatus, setShowOnlineStatus] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("setting_online_status");
+      return saved !== null ? JSON.parse(saved) : true;
+    }
+    return true;
+  });
 
   // Manual Update states
   const [currentVersion, setCurrentVersion] = useState("0.1.0");
@@ -49,11 +95,34 @@ export default function SettingsPage() {
     version?: string;
   }>({ status: "idle", message: "" });
 
+  // Sync settings changes to LocalStorage
+  useEffect(() => {
+    localStorage.setItem("setting_email_notifications", JSON.stringify(emailNotifications));
+  }, [emailNotifications]);
+
+  useEffect(() => {
+    localStorage.setItem("setting_call_notifications", JSON.stringify(callNotifications));
+  }, [callNotifications]);
+
+  useEffect(() => {
+    localStorage.setItem("setting_sound_enabled", JSON.stringify(soundEnabled));
+  }, [soundEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem("setting_profile_visibility", profileVisibility);
+  }, [profileVisibility]);
+
+  useEffect(() => {
+    localStorage.setItem("setting_online_status", JSON.stringify(showOnlineStatus));
+  }, [showOnlineStatus]);
+
   useEffect(() => {
     if (user) {
       setName(user.name);
       setEmail(user.email);
       setMobile(user.mobile || "");
+      setSelectedAvatar(user.avatarConfig?.image || "");
+      setSelectedColor(user.avatarConfig?.color || "#27272a");
     }
   }, [user]);
 
@@ -119,7 +188,13 @@ export default function SettingsPage() {
       const res = await fetch("/api/users/update", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, name, email, mobile }),
+        body: JSON.stringify({ 
+          token, 
+          name, 
+          email, 
+          mobile, 
+          avatarConfig: { image: selectedAvatar, color: selectedColor } 
+        }),
       });
 
       const data = await res.json();
@@ -176,24 +251,111 @@ export default function SettingsPage() {
         <div className="space-y-6">
           {/* Avatar Section */}
           <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
-            <h3 className="text-lg font-medium text-white mb-4">Profile Picture</h3>
-            <div className="flex items-center gap-6">
-              <div className="w-24 h-24 rounded-full overflow-hidden bg-zinc-800 flex items-center justify-center border-2 border-zinc-700">
-                {user?.avatarConfig?.image ? (
-                  <img
-                    src={user.avatarConfig.image}
-                    alt={user.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="text-2xl font-bold text-white">
-                    {user?.name?.[0]?.toUpperCase() || "U"}
-                  </span>
-                )}
+            <h3 className="text-lg font-medium text-white mb-4">Customize Profile Avatar</h3>
+            <div className="flex flex-col md:flex-row gap-6 items-start">
+              {/* Current Preview */}
+              <div className="flex flex-col items-center gap-3 shrink-0">
+                <div 
+                  className="w-24 h-24 rounded-full overflow-hidden flex items-center justify-center border-2 transition-colors duration-300"
+                  style={{ 
+                    backgroundColor: selectedColor,
+                    borderColor: selectedColor === "#27272a" ? "#3f3f46" : selectedColor 
+                  }}
+                >
+                  {selectedAvatar ? (
+                    <img
+                      src={selectedAvatar}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-2xl font-bold text-white">
+                      {name?.[0]?.toUpperCase() || "U"}
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs text-zinc-500 font-medium">Live Preview</span>
               </div>
-              <div>
-                <p className="text-sm text-zinc-400">Your profile avatar</p>
-                <p className="text-xs text-zinc-600 mt-1">Contact support to change your profile picture</p>
+
+              {/* Selector Panels */}
+              <div className="flex-1 space-y-4 w-full">
+                {/* Background Color Pickers */}
+                <div>
+                  <p className="text-sm font-medium text-zinc-400 mb-2">Profile Theme Color</p>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { value: "#27272a", label: "Zinc" },
+                      { value: "#b91c1c", label: "Red" },
+                      { value: "#c2410c", label: "Orange" },
+                      { value: "#b45309", label: "Amber" },
+                      { value: "#047857", label: "Emerald" },
+                      { value: "#0369a1", label: "Sky" },
+                      { value: "#1d4ed8", label: "Blue" },
+                      { value: "#4338ca", label: "Indigo" },
+                      { value: "#6d28d9", label: "Purple" },
+                      { value: "#be185d", label: "Pink" },
+                    ].map((c) => (
+                      <button
+                        key={c.value}
+                        type="button"
+                        onClick={() => setSelectedColor(c.value)}
+                        className={`w-8 h-8 rounded-full border transition-all cursor-pointer relative flex items-center justify-center ${
+                          selectedColor === c.value 
+                            ? "border-white scale-110" 
+                            : "border-transparent hover:scale-105"
+                        }`}
+                        style={{ backgroundColor: c.value }}
+                        title={c.label}
+                      >
+                        {selectedColor === c.value && (
+                          <div className="w-2.5 h-2.5 bg-white rounded-full" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Avatar Categories */}
+                <div>
+                  <p className="text-sm font-medium text-zinc-400 mb-2">Avatar Style</p>
+                  <div className="flex gap-1 overflow-x-auto pb-1 no-scrollbar border-b border-zinc-800">
+                    {Object.keys(avatarCounts).map((folder) => (
+                      <button
+                        key={folder}
+                        type="button"
+                        onClick={() => setAvatarFolder(folder)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all cursor-pointer whitespace-nowrap ${
+                          avatarFolder === folder
+                            ? "bg-zinc-800 text-white border border-zinc-700"
+                            : "text-zinc-500 hover:text-zinc-300"
+                        }`}
+                      >
+                        {folder}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Avatars Grid */}
+                <div className="grid grid-cols-5 sm:grid-cols-8 gap-2 max-h-48 overflow-y-auto no-scrollbar p-2 bg-zinc-950/40 rounded-xl border border-zinc-800/80">
+                  {Array.from({ length: avatarCounts[avatarFolder] }).map((_, idx) => {
+                    const path = `/avatars/${avatarFolder}/${idx + 1}.png`;
+                    return (
+                      <button
+                        key={path}
+                        type="button"
+                        onClick={() => setSelectedAvatar(path)}
+                        className={`aspect-square rounded-lg overflow-hidden border-2 bg-zinc-900 transition-all cursor-pointer ${
+                          selectedAvatar === path 
+                            ? "border-emerald-500 scale-105" 
+                            : "border-transparent hover:border-zinc-700"
+                        }`}
+                      >
+                        <img src={path} alt="Avatar option" className="w-full h-full object-cover" />
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>

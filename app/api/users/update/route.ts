@@ -9,7 +9,7 @@ const hashValue = (value: string) =>
 
 export async function POST(req: Request) {
   try {
-    const { token, name, email, mobile } = await req.json();
+    const { token, name, email, mobile, avatarConfig } = await req.json();
 
     if (!token) {
       return NextResponse.json({ message: "Authentication required" }, { status: 401 });
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
 
     const updatedUser = await User.findByIdAndUpdate(
       userId,
-      { name, email, mobile },
+      { name, email, mobile, avatarConfig },
       { new: true }
     );
 

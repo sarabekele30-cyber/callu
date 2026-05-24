@@ -98,6 +98,28 @@ const ICE_CONFIG: RTCConfiguration = {
   iceTransportPolicy: "all",
 };
 
+const optimizeSDP = (sdp: string): string => {
+  if (!sdp) return sdp;
+  
+  // 1. Force stereo, FEC (Forward Error Correction), and high bitrate (128kbps) for Opus audio codec
+  let optimized = sdp.replace(
+    /a=fmtp:(\d+) useinbandfec=1/g,
+    "a=fmtp:$1 useinbandfec=1;stereo=1;sprop-stereo=1;maxaveragebitrate=128000;minptime=10;ptime=20"
+  );
+  
+  // 2. Set interactive high priority for audio line
+  if (optimized.includes("a=mid:audio")) {
+    optimized = optimized.replace("a=mid:audio", "a=mid:audio\r\na=priority:high\r\na=extmap-allow-mixed");
+  }
+  
+  // 3. Set high priority for video line to ensure no packet drops or latency under heavy loads
+  if (optimized.includes("a=mid:video")) {
+    optimized = optimized.replace("a=mid:video", "a=mid:video\r\na=priority:high");
+  }
+  
+  return optimized;
+};
+
 export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
   const { socket } = useSocket();
@@ -276,7 +298,7 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
     // Stop speaking detection
     speakingFlags.current.forEach(flag => { flag.running = false; });
     speakingFlags.current.clear();
-    animationFrames.current.forEach((frameId) => cancelAnimationFrame(frameId));
+    animationFrames.current.forEach((timerId) => clearTimeout(timerId));
     animationFrames.current.clear();
 
     // Clear analyzers
@@ -489,8 +511,8 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
         flag.running = false;
         return;
       }
-      const frameId = requestAnimationFrame(checkAudioLevel);
-      animationFrames.current.set(userId, frameId);
+      const frameId = setTimeout(checkAudioLevel, 100);
+      animationFrames.current.set(userId, frameId as any);
     };
     checkAudioLevel();
   };
@@ -630,11 +652,15 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
       try {
         if (pc.signalingState !== "stable") return pc;
         const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
+        const optimizedOffer = new RTCSessionDescription({
+          type: offer.type,
+          sdp: optimizeSDP(offer.sdp || ""),
+        });
+        await pc.setLocalDescription(optimizedOffer);
         s.emit("room-signal", {
           roomId: rid,
           targetUserId,
-          signal: { type: "offer", sdp: offer },
+          signal: { type: "offer", sdp: optimizedOffer },
         });
       } catch (error) {
         console.error("Failed to create offer:", error);
@@ -695,11 +721,15 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
           await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
           await flushIceCandidates(fromUserId, pc);
           const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
+          const optimizedAnswer = new RTCSessionDescription({
+            type: answer.type,
+            sdp: optimizeSDP(answer.sdp || ""),
+          });
+          await pc.setLocalDescription(optimizedAnswer);
           s.emit("room-signal", {
             roomId: rid,
             targetUserId: fromUserId,
-            signal: { type: "answer", sdp: answer },
+            signal: { type: "answer", sdp: optimizedAnswer },
           });
         } catch (error) {
           console.error(`❌ Error handling offer from ${fromUserId}:`, error);
@@ -803,7 +833,7 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
     }
     const frameId = animationFrames.current.get(data.userId);
     if (frameId !== undefined) {
-      cancelAnimationFrame(frameId);
+      clearTimeout(frameId);
       animationFrames.current.delete(data.userId);
     }
   };
