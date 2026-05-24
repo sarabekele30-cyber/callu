@@ -1152,14 +1152,19 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
   const [isPTTActive, setIsPTTActive] = useState(false);
 
   useEffect(() => {
-    if (!window.electron) return;
+    console.log("[PTT-EFFECT] useEffect mounting. window.electron:", !!window.electron);
 
     let isKeyDown = false;
 
     // Helper: directly mute/unmute using refs (avoids stale closure from toggleMute)
     const setMuteState = (muted: boolean) => {
       const stream = localStreamRef.current;
-      if (!stream) return;
+      if (!stream) {
+        console.log("[PTT] setMuteState: no stream, aborting");
+        return;
+      }
+
+      console.log("[PTT] setMuteState:", muted, "| tracks:", stream.getAudioTracks().length, "| peers:", peerConnectionsRef.current.size);
 
       // Force toggle on local stream tracks
       stream.getAudioTracks().forEach((track) => {
@@ -1190,7 +1195,6 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
 
     const handleKeyDown = (data: { keycode: number }) => {
       console.log("[PTT] keydown received:", data.keycode, "| pttKeycodeRef:", pttKeycodeRef.current, "| isPTTEnabled:", isPTTEnabledRef.current, "| isKeyDown:", isKeyDown, "| isRecording:", isRecordingKeybindRef.current, "| stream:", !!localStreamRef.current);
-      // If we are recording a custom keybind, capture this keypress
       if (isRecordingKeybindRef.current) {
         setPttKeycode(data.keycode);
         setIsRecordingKeybind(false);
@@ -1202,29 +1206,84 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
         if (!isKeyDown) {
           isKeyDown = true;
           setIsPTTActive(true);
-          console.log("[PTT] >>> UNMUTING via setMuteState(false)");
-          setMuteState(false); // unmute while key is held
+          console.log("[PTT] UNMUTING via setMuteState(false)");
+          setMuteState(false);
         }
       }
     };
 
     const handleKeyUp = (data: { keycode: number }) => {
       if (isRecordingKeybindRef.current) return;
-      
       if (!isPTTEnabledRef.current) return;
       if (data.keycode === pttKeycodeRef.current) {
         isKeyDown = false;
         setIsPTTActive(false);
-        setMuteState(true); // re-mute when key is released
+        console.log("[PTT] RE-MUTING via setMuteState(true)");
+        setMuteState(true);
       }
     };
 
-    const removeDown = window.electron.on("ptt-keydown", handleKeyDown);
-    const removeUp = window.electron.on("ptt-keyup", handleKeyUp);
+    // Register via Electron IPC (global hook from uIOhook) if available
+    let removeDown: (() => void) | undefined;
+    let removeUp: (() => void) | undefined;
+    if (window.electron) {
+      removeDown = window.electron.on("ptt-keydown", handleKeyDown);
+      removeUp = window.electron.on("ptt-keyup", handleKeyUp);
+      console.log("[PTT-EFFECT] Registered IPC listeners for ptt-keydown / ptt-keyup");
+    }
+
+    // BROWSER FALLBACK: listen to browser-level keyboard events for PTT
+    // This handles cases where uIOhook IPC events do not fire
+    const BROWSER_CODE_TO_SCANCODE: Record<string, number> = {
+      "Space": 57, "ControlLeft": 29, "ControlRight": 3613,
+      "ShiftLeft": 42, "ShiftRight": 54, "AltLeft": 56, "AltRight": 3640,
+      "KeyA": 30, "KeyB": 48, "KeyC": 46, "KeyD": 32, "KeyE": 18,
+      "KeyF": 33, "KeyG": 34, "KeyH": 35, "KeyI": 23, "KeyJ": 36,
+      "KeyK": 37, "KeyL": 38, "KeyM": 50, "KeyN": 49, "KeyO": 24,
+      "KeyP": 25, "KeyQ": 16, "KeyR": 19, "KeyS": 31, "KeyT": 20,
+      "KeyU": 22, "KeyV": 47, "KeyW": 17, "KeyX": 45, "KeyY": 21,
+      "KeyZ": 44, "Digit0": 11, "Digit1": 2, "Digit2": 3, "Digit3": 4,
+      "Digit4": 5, "Digit5": 6, "Digit6": 7, "Digit7": 8, "Digit8": 9,
+      "Digit9": 10, "F1": 59, "F2": 60, "F3": 61, "F4": 62,
+      "F5": 63, "F6": 64, "F7": 65, "F8": 66, "F9": 67, "F10": 68,
+      "F11": 87, "F12": 88, "Tab": 15, "CapsLock": 58, "Escape": 1,
+      "Backquote": 41, "Minus": 12, "Equal": 13, "Backspace": 14,
+      "BracketLeft": 26, "BracketRight": 27, "Backslash": 43,
+      "Semicolon": 39, "Quote": 40, "Enter": 28, "Comma": 51,
+      "Period": 52, "Slash": 53, "ArrowUp": 57416, "ArrowDown": 57424,
+      "ArrowLeft": 57419, "ArrowRight": 57421,
+    };
+
+    const handleBrowserKeyDownForPTT = (e: KeyboardEvent) => {
+      const scanCode = BROWSER_CODE_TO_SCANCODE[e.code];
+      if (scanCode === undefined) return;
+      if (!isRecordingKeybindRef.current && isPTTEnabledRef.current && scanCode === pttKeycodeRef.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleKeyDown({ keycode: scanCode });
+      }
+    };
+
+    const handleBrowserKeyUpForPTT = (e: KeyboardEvent) => {
+      const scanCode = BROWSER_CODE_TO_SCANCODE[e.code];
+      if (scanCode === undefined) return;
+      if (!isRecordingKeybindRef.current && isPTTEnabledRef.current && scanCode === pttKeycodeRef.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleKeyUp({ keycode: scanCode });
+      }
+    };
+
+    window.addEventListener("keydown", handleBrowserKeyDownForPTT, { capture: true });
+    window.addEventListener("keyup", handleBrowserKeyUpForPTT, { capture: true });
+    console.log("[PTT-EFFECT] Registered browser fallback keydown/keyup listeners");
 
     return () => {
-      removeDown();
-      removeUp();
+      console.log("[PTT-EFFECT] useEffect cleanup - removing all PTT listeners");
+      removeDown?.();
+      removeUp?.();
+      window.removeEventListener("keydown", handleBrowserKeyDownForPTT, { capture: true });
+      window.removeEventListener("keyup", handleBrowserKeyUpForPTT, { capture: true });
     };
   }, []);
 
