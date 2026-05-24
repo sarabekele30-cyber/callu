@@ -11,7 +11,6 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
       "next/navigation": path.resolve(__dirname, "./src/electron-patches/next-navigation.ts"),
       "next/link": path.resolve(__dirname, "./src/electron-patches/next-link.tsx"),
-      "@/context/SocketContext": path.resolve(__dirname, "./src/electron-patches/SocketContext.electron.tsx"),
     },
   },
   base: "./",

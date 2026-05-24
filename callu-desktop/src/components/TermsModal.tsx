@@ -6,7 +6,7 @@ import { Shield, CheckCircle2, Sparkles } from "lucide-react";
 export default function TermsModal() {
   const [accepted, setAccepted] = useState(false);
 
-  const handleAccept = () => {
+  const handleAccept = async () => {
     // ── THIS IS THE TRICK ──
     // The "I Agree" click is a trusted user gesture, so we use it
     // to unlock audio playback for the entire page session.
@@ -37,6 +37,29 @@ export default function TermsModal() {
       }).catch(() => {});
     } catch (e) {
       // ignore
+    }
+
+    // Pre-request microphone and camera permissions to ensure WebRTC works seamlessly
+    try {
+      console.log("🎤 Requesting audio and video permissions...");
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        stream.getTracks().forEach((track) => track.stop());
+        console.log("✅ Audio and video permissions granted successfully!");
+      }
+    } catch (err) {
+      console.warn("⚠️ Media permissions request rejected or failed:", err);
+      // Fallback: try only audio in case camera is missing
+      try {
+        console.log("🎤 Requesting audio permission only...");
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          audioStream.getTracks().forEach((track) => track.stop());
+          console.log("✅ Audio permission granted successfully!");
+        }
+      } catch (audioErr) {
+        console.error("❌ Audio permission also failed:", audioErr);
+      }
     }
 
     setAccepted(true);

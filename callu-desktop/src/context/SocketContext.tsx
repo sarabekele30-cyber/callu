@@ -1,12 +1,10 @@
-"use client";
-
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
-import { useAuth } from "./AuthContext";
+import { useAuth } from "@/context/AuthContext";
 
 interface SocketContextType {
   socket: Socket | null;
-  onlineUsers: string[]; // List of userIds (or socketIds in simple case, but we mapped userId)
+  onlineUsers: string[];
 }
 
 const SocketContext = createContext<SocketContextType>({
@@ -22,14 +20,21 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     if (user && user.status === 'approved' && !socketRef.current) {
-      // Connect to the same host
-      const newSocket = io({
-        path: "/socket.io", // Standard path, can be customized
+      const serverUrl = import.meta.env.VITE_API_URL || "https://callu-production.up.railway.app";
+      console.log(`[Socket] Connecting to server at ${serverUrl}`);
+      const newSocket = io(serverUrl, {
+        path: "/socket.io",
+        transports: ["websocket"],
       });
 
       newSocket.on("connect", () => {
+        console.log("[Socket] Connected successfully, identifying user...");
         setIsSocketConnected(true);
         newSocket.emit("identify", user._id);
+      });
+
+      newSocket.on("connect_error", (error) => {
+        console.error("[Socket] Connection error:", error);
       });
 
       newSocket.on("online-users-list", (users: string[]) => {
@@ -46,12 +51,10 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
       newSocket.on("disconnect", (reason) => {
         setIsSocketConnected(false);
-        // Auto-reconnect is handled by Socket.IO, no action needed
       });
 
       socketRef.current = newSocket;
 
-      // Cleanup
       return () => {
         newSocket.disconnect();
         socketRef.current = null;
