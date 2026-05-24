@@ -40,10 +40,10 @@ export default function DashboardLayout({
       <CallProvider>
         <RoomVoiceProvider>
         <RoomMusicProvider>
-          <div className="min-h-screen bg-black text-white flex">
+          <div className="h-screen overflow-hidden bg-black text-white flex w-full min-h-0">
              <DashboardSidebar />
              
-             <main className="flex-1 p-8 overflow-y-auto">
+             <main className="flex-1 p-8 overflow-y-auto overscroll-contain min-h-0">
                {children}
              </main>
 

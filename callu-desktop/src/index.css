@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+/* Lock viewport height and disable screen-wide scrolling */
+html, body, #root {
+  height: 100vh;
+  max-height: 100vh;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -115,5 +125,25 @@ html.lenis, html.lenis body { height: auto; }
 .no-scrollbar {
   scrollbar-width: none;
   -ms-overflow-style: none;
+}
+
+/* CSS for room name scrolling in sidebar */
+.room-name-text {
+  display: block;
+  white-space: nowrap;
+  transition: transform 0.5s ease-out;
+}
+
+.room-name-text.should-scroll {
+  animation: slide-reveal 3s ease-in-out infinite;
+}
+
+@keyframes slide-reveal {
+  0%, 100% { 
+    transform: translateX(0); 
+  }
+  50% { 
+    transform: translateX(var(--scroll-distance, 0)); 
+  }
 }
 

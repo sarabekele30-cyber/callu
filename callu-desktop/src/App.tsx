@@ -204,9 +204,9 @@ export default function App() {
       <AuthProvider>
         <SmoothScrolling>
           <ScreenShareProvider>
-            <div className="flex flex-col h-full w-full bg-black text-white">
+            <div className="flex flex-col h-full w-full bg-black text-white min-h-0">
               <Titlebar />
-              <div className="flex-1 overflow-y-auto overflow-x-hidden relative">
+              <div className="flex-1 overflow-hidden relative min-h-0 flex flex-col">
                 <Routes>
                   {/* Public route */}
                   <Route path="/" element={<Home />} />

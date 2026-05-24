@@ -232,7 +232,7 @@ export function DashboardSidebar() {
       animate={{ width: isCollapsed ? 80 : 256 }}
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
       className={cn(
-        "bg-black border-r border-zinc-900 h-screen sticky top-0 hidden md:flex flex-col justify-between py-6 z-20 overflow-hidden relative"
+        "bg-black border-r border-zinc-900 h-screen sticky top-0 hidden md:flex flex-col justify-between py-6 z-20 overflow-hidden relative shrink-0"
       )}
     >
         {/* Toggle Button */}
@@ -249,9 +249,9 @@ export function DashboardSidebar() {
       </button>
 
 
-      <div className={cn("flex flex-col", isCollapsed ? "items-center px-2" : "px-6")}>
+      <div className={cn("flex flex-col flex-1 min-h-0", isCollapsed ? "items-center px-2" : "px-6")}>
         {/* Logo */}
-        <div className={cn("mb-10 flex items-center h-8 relative transition-all", isCollapsed ? "justify-center" : "")}>
+        <div className={cn("mb-10 flex items-center h-8 relative transition-all shrink-0", isCollapsed ? "justify-center" : "")}>
           {isCollapsed ? (
              <div className="flex items-center flex-col gap-1">
                 <span className="text-xl font-black tracking-tighter text-white">C</span>
@@ -266,7 +266,7 @@ export function DashboardSidebar() {
         </div>
 
         {/* Navigation */}
-        <nav className={cn("space-y-2 w-full transition-all", isCollapsed ? "mt-8" : "")}>
+        <nav className={cn("space-y-2 w-full transition-all flex-1 min-h-0 overflow-y-auto no-scrollbar overscroll-contain", isCollapsed ? "mt-8" : "")}>
           {navItems.map((item) => (
             <div key={item.label}>
               {/* Parent Item */}
@@ -721,7 +721,7 @@ export function DashboardSidebar() {
         )}
       </AnimatePresence>
 
-      <div className={cn("border-t border-zinc-900 mt-auto", isCollapsed ? "p-4" : "p-6")}>
+      <div className={cn("border-t border-zinc-900 mt-auto bg-black shrink-0", isCollapsed ? "p-4" : "p-6")}>
         {user && (
           <div className={cn(
             "relative group/voice flex items-center mb-3 rounded-xl p-2 transition-all",
@@ -881,27 +881,7 @@ export function DashboardSidebar() {
         </>
       )}
 
-      {/* CSS for room name scrolling */}
-      <style jsx>{`
-        .room-name-text {
-          display: block;
-          white-space: nowrap;
-          transition: transform 0.5s ease-out;
-        }
-        
-        .room-name-text.should-scroll {
-          animation: slide-reveal 3s ease-in-out infinite;
-        }
-        
-        @keyframes slide-reveal {
-          0%, 100% { 
-            transform: translateX(0); 
-          }
-          50% { 
-            transform: translateX(var(--scroll-distance, 0)); 
-          }
-        }
-      `}</style>
+
     </motion.aside>
   );
 }
