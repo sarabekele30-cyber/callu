@@ -6,7 +6,9 @@ let currentStatus = "Running";
 
 export function createTray(mainWindow: BrowserWindow, onQuit: () => void) {
   // Use a transparent PNG or application icon. For now, use a fallback path
-  const iconPath = path.join(__dirname, "../../dist/Verification-Blue-Tick-PNG.png");
+  const iconPath = app.isPackaged
+    ? path.join(process.resourcesPath, "Verification-Blue-Tick-PNG.png")
+    : path.join(__dirname, "../../public/Verification-Blue-Tick-PNG.png");
   
   tray = new Tray(iconPath);
 

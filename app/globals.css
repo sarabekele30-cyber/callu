@@ -21,6 +21,24 @@
   }
 }
 
+/* Critical for Electron scrolling */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+#__next {
+  height: 100%;
+  overflow: hidden;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
@@ -115,5 +133,25 @@ html.lenis, html.lenis body { height: auto; }
 .no-scrollbar {
   scrollbar-width: none;
   -ms-overflow-style: none;
+}
+
+/* CSS for room name scrolling in sidebar */
+.room-name-text {
+  display: block;
+  white-space: nowrap;
+  transition: transform 0.5s ease-out;
+}
+
+.room-name-text.should-scroll {
+  animation: slide-reveal 3s ease-in-out infinite;
+}
+
+@keyframes slide-reveal {
+  0%, 100% { 
+    transform: translateX(0); 
+  }
+  50% { 
+    transform: translateX(var(--scroll-distance, 0)); 
+  }
 }
 

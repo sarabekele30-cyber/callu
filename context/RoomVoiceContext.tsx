@@ -96,6 +96,28 @@ const ICE_CONFIG: RTCConfiguration = {
   iceTransportPolicy: "all",
 };
 
+const optimizeSDP = (sdp: string): string => {
+  if (!sdp) return sdp;
+  
+  // 1. Force stereo, FEC (Forward Error Correction), and high bitrate (128kbps) for Opus audio codec
+  let optimized = sdp.replace(
+    /a=fmtp:(\d+) useinbandfec=1/g,
+    "a=fmtp:$1 useinbandfec=1;stereo=1;sprop-stereo=1;maxaveragebitrate=128000;minptime=10;ptime=20"
+  );
+  
+  // 2. Set interactive high priority for audio line
+  if (optimized.includes("a=mid:audio")) {
+    optimized = optimized.replace("a=mid:audio", "a=mid:audio\r\na=priority:high\r\na=extmap-allow-mixed");
+  }
+  
+  // 3. Set high priority for video line to ensure no packet drops or latency under heavy loads
+  if (optimized.includes("a=mid:video")) {
+    optimized = optimized.replace("a=mid:video", "a=mid:video\r\na=priority:high");
+  }
+  
+  return optimized;
+};
+
 export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
   const { socket } = useSocket();
@@ -182,7 +204,7 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
         audioCtxRef.current.resume();
       }
       audioRefs.current.forEach((audio) => {
-        if (audio.muted && !isDeafenedRef.current) {
+        if (!isDeafenedRef.current) {
           audio.muted = false;
           audio.play().catch(() => {});
         }
@@ -274,7 +296,7 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
     // Stop speaking detection
     speakingFlags.current.forEach(flag => { flag.running = false; });
     speakingFlags.current.clear();
-    animationFrames.current.forEach((frameId) => cancelAnimationFrame(frameId));
+    animationFrames.current.forEach((timerId) => clearTimeout(timerId));
     animationFrames.current.clear();
 
     // Clear analyzers
@@ -381,6 +403,10 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
         },
       });
       localStreamRef.current = stream;
+      const track = stream.getAudioTracks()[0];
+      if (track) {
+        track.enabled = !isMutedRef.current;
+      }
       setupLocalAudioAnalyzer(stream);
       void refreshDeviceLists();
       return stream;
@@ -486,8 +512,8 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
         flag.running = false;
         return;
       }
-      const frameId = requestAnimationFrame(checkAudioLevel);
-      animationFrames.current.set(userId, frameId);
+      const frameId = setTimeout(checkAudioLevel, 100);
+      animationFrames.current.set(userId, frameId as any);
     };
     checkAudioLevel();
   };
@@ -573,7 +599,7 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
           }
         };
         
-        allocateBandwidth();
+        // allocateBandwidth();
       } else if (pc.iceConnectionState === "failed") {
         console.error(`❌ ICE failed with ${targetUserId}`);
       }
@@ -800,7 +826,7 @@ export const RoomVoiceProvider = ({ children }: { children: React.ReactNode }) =
     }
     const frameId = animationFrames.current.get(data.userId);
     if (frameId !== undefined) {
-      cancelAnimationFrame(frameId);
+      clearTimeout(frameId);
       animationFrames.current.delete(data.userId);
     }
   };

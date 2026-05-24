@@ -21,7 +21,7 @@ const Titlebar = () => {
 
   return (
     <div 
-      className="h-10 bg-zinc-950 border-b border-zinc-900 flex items-center justify-between px-4 select-none shrink-0" 
+      className="h-10 bg-zinc-950 border-b border-zinc-900 flex items-center justify-between px-4 select-none shrink-0 sticky top-0 z-50" 
       style={{ WebkitAppRegion: "drag" } as any}
     >
       <div className="flex items-center gap-2">
@@ -45,7 +45,7 @@ const Titlebar = () => {
         </button>
         <button 
           onClick={() => window.electron.send("window-close")} 
-          className="h-10 w-12 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-red-650 transition-colors"
+          className="h-10 w-12 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-red-600 transition-colors"
           title="Close to Tray"
         >
           <X className="w-3.5 h-3.5" />
@@ -100,20 +100,44 @@ const ScreenShareProvider = ({ children }: { children: React.ReactNode }) => {
   const handleSelect = async (sourceId: string) => {
     setIsOpen(false);
     try {
-      // Use getUserMedia to request specific desktopCapturer stream
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: {
-          mandatory: {
-            chromeMediaSource: "desktop",
-            chromeMediaSourceId: sourceId,
-            minWidth: 1280,
-            maxWidth: 1920,
-            minHeight: 720,
-            maxHeight: 1080,
-          },
-        } as any,
-      });
+      let stream: MediaStream;
+      try {
+        // Try to capture BOTH screen video and system/desktop audio
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            mandatory: {
+              chromeMediaSource: "desktop",
+            },
+          } as any,
+          video: {
+            mandatory: {
+              chromeMediaSource: "desktop",
+              chromeMediaSourceId: sourceId,
+              minWidth: 1280,
+              maxWidth: 1920,
+              minHeight: 720,
+              maxHeight: 1080,
+            },
+          } as any,
+        });
+        console.log("Successfully captured screen stream WITH desktop/system audio.");
+      } catch (audioErr) {
+        console.warn("Failed to capture system audio, falling back to video-only screen capture:", audioErr);
+        // Fallback to video-only capture
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            mandatory: {
+              chromeMediaSource: "desktop",
+              chromeMediaSourceId: sourceId,
+              minWidth: 1280,
+              maxWidth: 1920,
+              minHeight: 720,
+              maxHeight: 1080,
+            },
+          } as any,
+        });
+      }
       resolveRef.current?.(stream);
     } catch (err) {
       console.error("Error setting up screen capture stream", err);
@@ -204,9 +228,9 @@ export default function App() {
       <AuthProvider>
         <SmoothScrolling>
           <ScreenShareProvider>
-            <div className="flex flex-col h-screen w-screen overflow-hidden bg-black text-white">
+            <div className="flex flex-col h-full w-full bg-black text-white min-h-0">
               <Titlebar />
-              <div className="flex-1 overflow-hidden relative">
+              <div className="flex-1 overflow-hidden relative min-h-0 flex flex-col">
                 <Routes>
                   {/* Public route */}
                   <Route path="/" element={<Home />} />

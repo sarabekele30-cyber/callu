@@ -133,6 +133,9 @@ function createMainWindow() {
     minHeight: 600,
     frame: false,
     backgroundColor: "#000000",
+    icon: app.isPackaged
+      ? path.join(process.resourcesPath, "icon.png")
+      : path.join(__dirname, "../../public/icon.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -385,6 +388,9 @@ async function setupAutoUpdater() {
 }
 
 app.on("ready", () => {
+  // Set AppUserModelId for Windows taskbar icon grouping support
+  app.setAppUserModelId("com.callu.desktop");
+
   // Grant microphone, camera, and display-capture permissions automatically
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     const allowed = ["media", "audioCapture", "videoCapture", "notifications", "display-capture"];

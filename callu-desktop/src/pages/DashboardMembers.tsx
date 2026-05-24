@@ -122,6 +122,7 @@ export default function MembersPage() {
                           src={member.avatarConfig.image} 
                           alt={member.name}
                           className="w-full h-full object-cover"
+                          loading="lazy"
                         />
                       ) : (
                         <span className="text-3xl font-bold text-white">{member.name[0].toUpperCase()}</span>

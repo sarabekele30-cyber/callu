@@ -15,12 +15,12 @@ export default function AdminLayout() {
     }
   }, [user, isLoading, router]);
 
-  if (isLoading) return <div className="flex h-screen items-center justify-center text-zinc-500">Loading...</div>;
+  if (isLoading) return <div className="flex h-full items-center justify-center text-zinc-500">Loading...</div>;
 
   if (!user || user.role !== "admin") return null;
 
   return (
-    <div className="min-h-screen bg-black text-zinc-100 p-8">
+    <div className="h-full bg-black text-zinc-100 p-8 overflow-y-auto">
       <nav className="mb-8 flex justify-between items-center border-b border-zinc-800 pb-4">
         <h1 className="text-xl font-bold tracking-tight">Admin Dashboard</h1>
         <div className="flex gap-4">

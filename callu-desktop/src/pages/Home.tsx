@@ -1,17 +1,31 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import ApplyModal, { LoginModal } from "@/components/ApplyModal";
 import StyledButton from "@/components/StyledButton";
 import MemberButton from "@/components/MemberButton";
 import { Mic, Shield, Lock, Zap, Twitter, Linkedin, Github, Mail, Activity } from "lucide-react";
 import { Footer } from "@/components/ui/modem-animated-footer";
+import { useAuth } from "@/context/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 export default function Home() {
   const [showApply, setShowApply] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+  const { user, isLoading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isLoading && user) {
+      if (user.role === "admin") {
+        navigate("/admin", { replace: true });
+      } else {
+        navigate("/dashboard/members", { replace: true });
+      }
+    }
+  }, [user, isLoading, navigate]);
 
   return (
-    <main className="min-h-screen bg-black text-white relative overflow-hidden flex flex-col items-center">
+    <main className="bg-black text-white relative flex flex-col items-center w-full h-full overflow-y-auto">
       {/* Background Ambience */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
         <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-purple-900/20 rounded-full blur-[128px]" />

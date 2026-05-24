@@ -28,17 +28,17 @@ export default function DashboardLayout() {
     }
   }, [user, isLoading, router]);
 
-  if (isLoading || !user) return <div className="h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
+  if (isLoading || !user) return <div className="h-full bg-black flex items-center justify-center text-white">Loading...</div>;
 
   return (
     <SocketProvider>
       <CallProvider>
         <RoomVoiceProvider>
         <RoomMusicProvider>
-          <div className="min-h-screen bg-black text-white flex w-full">
+          <div className="flex-1 overflow-hidden bg-black text-white flex w-full min-h-0">
              <DashboardSidebar />
              
-             <main className="flex-1 p-8 overflow-y-auto">
+             <main className="flex-1 p-8 overflow-y-auto overflow-x-hidden overscroll-contain min-h-0 no-scrollbar">
                <Outlet />
              </main>
 
