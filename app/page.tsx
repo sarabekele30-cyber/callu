@@ -1,14 +1,28 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import ApplyModal, { LoginModal } from "@/components/ApplyModal";
 import StyledButton from "@/components/StyledButton";
 import MemberButton from "@/components/MemberButton";
 import { Mic, Shield, Lock, Zap, Twitter, Linkedin, Github, Mail, Activity } from "lucide-react";
 import { Footer } from "@/components/ui/modem-animated-footer";
+import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 
 export default function Home() {
   const [showApply, setShowApply] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isLoading && user) {
+      if (user.role === "admin") {
+        router.replace("/admin");
+      } else {
+        router.replace("/dashboard/members");
+      }
+    }
+  }, [user, isLoading, router]);
 
   return (
     <main className="bg-black text-white relative flex flex-col items-center w-full">

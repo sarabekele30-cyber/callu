@@ -38,7 +38,7 @@ export default function DashboardLayout() {
           <div className="flex-1 overflow-hidden bg-black text-white flex w-full min-h-0">
              <DashboardSidebar />
              
-             <main className="flex-1 p-8 overflow-y-auto overflow-x-hidden overscroll-contain min-h-0">
+             <main className="flex-1 p-8 overflow-y-auto overflow-x-hidden overscroll-contain min-h-0 no-scrollbar">
                <Outlet />
              </main>
 

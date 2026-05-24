@@ -21,7 +21,7 @@ import {
 import { toast } from "sonner";
 
 export default function SettingsPage() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"profile" | "notifications" | "privacy" | "account" | "updates">("profile");
 
@@ -100,10 +100,36 @@ export default function SettingsPage() {
   const handleSaveProfile = async () => {
     setLoading(true);
     try {
-      // TODO: Implement API call to update profile
-      // await fetch('/api/user/update', { method: 'POST', body: JSON.stringify({ name, email, mobile }) });
-      console.log("Saving profile:", { name, email, mobile });
-      toast.success("Profile updated successfully!");
+      const storedSession = localStorage.getItem("callu_session");
+      let token = "";
+      if (storedSession) {
+        try {
+          const parsed = JSON.parse(storedSession);
+          token = parsed.token;
+        } catch (e) {
+          console.error("Failed to parse session token:", e);
+        }
+      }
+
+      if (!token) {
+        toast.error("You must be logged in to update your profile.");
+        return;
+      }
+
+      const res = await fetch("/api/users/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, name, email, mobile }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        updateUser(data.user);
+        toast.success("Profile updated successfully!");
+      } else {
+        toast.error(data.message || "Failed to update profile");
+      }
     } catch (err) {
       console.error("Failed to update profile:", err);
       toast.error("Failed to update profile");

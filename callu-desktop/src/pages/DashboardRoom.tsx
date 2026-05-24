@@ -134,36 +134,16 @@ export default function RoomVoiceChatPage() {
   useEffect(() => { isScreenSharingRef.current = isScreenSharing; }, [isScreenSharing]);
   useEffect(() => { participantsRef.current = participants; }, [participants]);
 
-  // ─── Cleanup on unmount ─────────────────────────────────────────
+  // ─── Listen for Escape key to exit fullscreen ──────────────────
   useEffect(() => {
-    return () => {
-      if (isScreenShareFullscreen && document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
-      }
-    };
-  }, []);
-
-  // ─── Listen for fullscreen changes & Escape key ──────────────────
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      if (!document.fullscreenElement && isScreenShareFullscreen) {
-        setIsScreenShareFullscreen(false);
-      }
-    };
-
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isScreenShareFullscreen) {
-        if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {});
-        }
         setIsScreenShareFullscreen(false);
       }
     };
 
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
     window.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.removeEventListener("fullscreenchange", handleFullscreenChange);
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isScreenShareFullscreen]);
@@ -1149,25 +1129,8 @@ export default function RoomVoiceChatPage() {
     router.push("/dashboard/members");
   };
 
-  const toggleScreenShareFullscreen = async () => {
-    const container = spotlightContainerRef.current;
-    if (!container) return;
-
-    if (isScreenShareFullscreen) {
-      // Exit fullscreen
-      if (document.fullscreenElement) {
-        await document.exitFullscreen().catch(() => {});
-      }
-      setIsScreenShareFullscreen(false);
-    } else {
-      // Enter fullscreen
-      setIsScreenShareFullscreen(true);
-      try {
-        await container.requestFullscreen({ navigationUI: "hide" });
-      } catch (err) {
-        console.warn("HTML5 Fullscreen request failed (using windowed fallback):", err);
-      }
-    }
+  const toggleScreenShareFullscreen = () => {
+    setIsScreenShareFullscreen(prev => !prev);
   };
 
   // ═══════════════════════════════════════════════════════════════════
@@ -1369,7 +1332,7 @@ export default function RoomVoiceChatPage() {
             </div>
 
             {/* Bottom strip — everyone EXCEPT the current spotlight user */}
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
+            <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
               {(() => {
                 const currentSpotlightId =
                   spotlightUserId ||
@@ -2078,7 +2041,7 @@ export default function RoomVoiceChatPage() {
         style={{ position: "fixed", width: 1, height: 1, opacity: 0, pointerEvents: "none", top: 0, left: 0, zIndex: -1 }}
       />
 
-      <style jsx global>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @keyframes music-bar {
           0%, 100% { transform: scaleY(0.5); opacity: 0.5; }
           50% { transform: scaleY(1); opacity: 1; }
@@ -2090,7 +2053,7 @@ export default function RoomVoiceChatPage() {
           0%, 100% { transform: scaleY(0.5); }
           50% { transform: scaleY(1.2); }
         }
-      `}</style>
+      ` }} />
     </div>
   );
 }

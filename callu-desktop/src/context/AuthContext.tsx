@@ -24,6 +24,7 @@ interface AuthContextType {
   verifyLoginCode: (email: string, code: string) => Promise<boolean>;
   logout: () => void;
   isLoading: boolean;
+  updateUser: (userData: User) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -33,6 +34,7 @@ const AuthContext = createContext<AuthContextType>({
   verifyLoginCode: async () => false,
   logout: () => {},
   isLoading: true,
+  updateUser: () => {},
 });
 
 const SESSION_KEY = "callu_session";
@@ -197,8 +199,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     router.push("/");
   };
 
+  const updateUser = (userData: User) => {
+    setUser(userData);
+    localStorage.setItem(USER_KEY, JSON.stringify(userData));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, requestLoginCode, verifyLoginCode, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, requestLoginCode, verifyLoginCode, logout, isLoading, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
