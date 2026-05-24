@@ -134,16 +134,27 @@ export default function RoomVoiceChatPage() {
   useEffect(() => { isScreenSharingRef.current = isScreenSharing; }, [isScreenSharing]);
   useEffect(() => { participantsRef.current = participants; }, [participants]);
 
-  // ─── Listen for Escape key to exit fullscreen ──────────────────
+  // ─── Listen for Fullscreen changes and Escape key ───────────────
   useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isCurrentlyFullscreen = !!document.fullscreenElement;
+      setIsScreenShareFullscreen(isCurrentlyFullscreen);
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isScreenShareFullscreen) {
-        setIsScreenShareFullscreen(false);
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        } else {
+          setIsScreenShareFullscreen(false);
+        }
       }
     };
 
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
     window.addEventListener("keydown", handleKeyDown);
     return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isScreenShareFullscreen]);
@@ -1130,7 +1141,31 @@ export default function RoomVoiceChatPage() {
   };
 
   const toggleScreenShareFullscreen = () => {
-    setIsScreenShareFullscreen(prev => !prev);
+    const el = spotlightContainerRef.current;
+    if (!el) {
+      setIsScreenShareFullscreen(prev => !prev);
+      return;
+    }
+
+    if (!document.fullscreenElement) {
+      el.requestFullscreen()
+        .then(() => {
+          setIsScreenShareFullscreen(true);
+        })
+        .catch((err) => {
+          console.error("Failed to enter native fullscreen:", err);
+          setIsScreenShareFullscreen(true); // Fallback to CSS fullscreen class
+        });
+    } else {
+      document.exitFullscreen()
+        .then(() => {
+          setIsScreenShareFullscreen(false);
+        })
+        .catch((err) => {
+          console.error("Failed to exit native fullscreen:", err);
+          setIsScreenShareFullscreen(false); // Fallback to CSS fullscreen class
+        });
+    }
   };
 
   // ═══════════════════════════════════════════════════════════════════
@@ -1243,7 +1278,7 @@ export default function RoomVoiceChatPage() {
                           autoPlay
                           playsInline
                           muted
-                          className={`absolute inset-0 w-full h-full bg-black object-cover`}
+                          className={`absolute inset-0 w-full h-full bg-zinc-950 object-contain`}
                           style={!isScreenSharing ? { transform: "scaleX(-1)" } : undefined}
                         />
                       ) : (
@@ -1255,7 +1290,7 @@ export default function RoomVoiceChatPage() {
                           autoPlay
                           playsInline
                           muted
-                          className={`absolute inset-0 w-full h-full bg-black object-cover`}
+                          className={`absolute inset-0 w-full h-full bg-zinc-950 object-contain`}
                         />
                       )
                     ) : (
@@ -1301,7 +1336,7 @@ export default function RoomVoiceChatPage() {
                             </div>
                           )}
                         </div>
-                        {sp.isScreenSharing && (
+                        {(sp.isScreenSharing || sp.isVideoOn) && (
                           <button
                             onClick={toggleScreenShareFullscreen}
                             className="ml-2 p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition"
