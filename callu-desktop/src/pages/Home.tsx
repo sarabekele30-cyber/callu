@@ -7,6 +7,7 @@ import { Mic, Shield, Lock, Zap, Twitter, Linkedin, Github, Mail, Activity } fro
 import { Footer } from "@/components/ui/modem-animated-footer";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { LAST_ROUTE_KEY } from "../App";
 
 export default function Home() {
   const [showApply, setShowApply] = useState(false);
@@ -19,10 +20,33 @@ export default function Home() {
       if (user.role === "admin") {
         navigate("/admin", { replace: true });
       } else {
-        navigate("/dashboard/members", { replace: true });
+        // Restore the last visited page, or default to members
+        const lastRoute = localStorage.getItem(LAST_ROUTE_KEY);
+        const destination =
+          lastRoute && lastRoute.startsWith("/dashboard")
+            ? lastRoute
+            : "/dashboard/members";
+        navigate(destination, { replace: true });
       }
     }
   }, [user, isLoading, navigate]);
+
+  // Show a black splash screen while:
+  // 1. Auth is still resolving (isLoading = true)
+  // 2. Auth is done but user is set — navigation is queued in useEffect,
+  //    so we stay on the splash to avoid flashing the landing page for a frame.
+  if (isLoading || user) {
+    return (
+      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center gap-4 z-50">
+        <img
+          src="/icon-nobg.png"
+          alt="Callu"
+          className="w-20 h-20 object-contain animate-pulse"
+          style={{ filter: "drop-shadow(0 0 24px rgba(16,185,129,0.35))" }}
+        />
+      </div>
+    );
+  }
 
   return (
     <main className="bg-black text-white relative flex flex-col items-center w-full h-full overflow-y-auto">

@@ -68,11 +68,19 @@ export default function MembersPage() {
     }
   };
 
+  const sortedUsers = [...users].sort((a, b) => {
+    const aOnline = isOnline(a._id);
+    const bOnline = isOnline(b._id);
+    if (aOnline && !bOnline) return -1;
+    if (!aOnline && bOnline) return 1;
+    return 0;
+  });
+
   return (
     <div className="space-y-8">
-      <header>
+      <header className="flex items-baseline gap-3">
          <h2 className="text-3xl font-light tracking-tight text-white">Members</h2>
-         <p className="text-zinc-500 mt-2">
+         <p className="text-zinc-500">
            {users.length > 0
              ? `${onlineCount} online • ${users.length} total`
              : "No members yet"}
@@ -100,24 +108,18 @@ export default function MembersPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {users.map((member) => (
-             <div key={member._id} className="group relative bg-zinc-900/40 border border-zinc-800/50 rounded-3xl p-6 backdrop-blur-sm hover:border-zinc-700/80 hover:bg-zinc-800/60 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-black/50">
+          {sortedUsers.map((member) => (
+             <div key={member._id} className="group relative bg-zinc-900/40 border border-zinc-800/50 rounded-3xl p-4 backdrop-blur-sm hover:border-zinc-700/80 hover:bg-zinc-800/60 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-black/50">
                 
-                {/* Status Indicator */}
-                <div className="absolute top-6 right-6 flex items-center gap-2">
-                  {isOnline(member._id) ? (
-                    <span className="relative flex h-2.5 w-2.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                    </span>
-                  ) : (
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-zinc-600"></span>
-                  )}
-                </div>
 
-                <div className="flex flex-col items-center mb-6 pt-4">
-                   <div className="w-24 h-24 rounded-full overflow-hidden flex items-center justify-center bg-zinc-800 ring-4 ring-zinc-800/50 group-hover:ring-zinc-700 transition-all mb-4 shadow-lg">
-                      {member.avatarConfig?.image ? (
+
+                 <div className="flex flex-col items-center mb-4 pt-2">
+                    <div className="relative mb-3">
+                      {isOnline(member._id) && (
+                        <div className="absolute inset-0 rounded-full bg-emerald-500/20 blur-sm scale-110 animate-pulse"></div>
+                      )}
+                      <div className={`relative w-16 h-16 rounded-full overflow-hidden flex items-center justify-center bg-zinc-800 transition-all duration-500 z-10 ${isOnline(member._id) ? 'ring-[3px] ring-emerald-500 ring-offset-2 ring-offset-zinc-900 shadow-[0_0_20px_rgba(16,185,129,0.4)]' : 'ring-2 ring-zinc-800/50 group-hover:ring-zinc-700 shadow-lg'}`}>
+                        {member.avatarConfig?.image ? (
                         <img 
                           src={member.avatarConfig.image} 
                           alt={member.name}
@@ -125,11 +127,12 @@ export default function MembersPage() {
                           loading="lazy"
                         />
                       ) : (
-                        <span className="text-3xl font-bold text-white">{member.name[0].toUpperCase()}</span>
+                         <span className="text-xl font-bold text-white">{member.name[0].toUpperCase()}</span>
                       )}
                    </div>
+                   </div>
                    <div className="flex items-center justify-center gap-2">
-                     <h3 className="text-xl font-medium text-white group-hover:text-emerald-400 transition-colors">{member.name}</h3>
+                      <h3 className="text-base font-medium text-white group-hover:text-emerald-400 transition-colors">{member.name}</h3>
                      <img src="/Verification-Blue-Tick-PNG.webp" alt="Verified" className="w-5 h-5 flex-shrink-0" />
                    </div>
                    <p className="text-xs text-zinc-500 uppercase tracking-widest mt-1">Verified Member</p>
@@ -137,26 +140,26 @@ export default function MembersPage() {
 
                 <div className="space-y-3">
                   {isOnline(member._id) ? (
-                    <>
+                    <div className="flex items-center gap-3">
                       <button
                         onClick={() => callUser(member._id, member.name, member.avatarConfig?.image, "voice")}
-                        className="w-full bg-white text-black hover:bg-zinc-200 py-3 rounded-2xl font-medium flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shadow-lg shadow-white/5"
+                        className="flex-1 bg-white text-black hover:bg-zinc-200 py-2.5 rounded-2xl flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-lg shadow-white/5"
                         title="Start Voice Call"
                       >
-                        <Mic size={18} /> <span className="tracking-wide">Voice Call</span>
+                        <Mic size={20} />
                       </button>
                       <button
                         onClick={() => callUser(member._id, member.name, member.avatarConfig?.image, "video")}
-                        className="w-full bg-blue-600 text-white hover:bg-blue-700 py-3 rounded-2xl font-medium flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shadow-lg shadow-blue-500/20"
+                        className="flex-1 bg-blue-600 text-white hover:bg-blue-700 py-2.5 rounded-2xl flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-lg shadow-blue-500/20"
                         title="Start Video Call"
                       >
-                        <Video size={18} /> <span className="tracking-wide">Video Call</span>
+                        <Video size={20} />
                       </button>
-                    </>
+                    </div>
                   ) : (
                     <button
                       onClick={() => handleNotify(member._id)}
-                      className="w-full py-4 rounded-2xl bg-zinc-800/50 text-zinc-300 border border-zinc-700/30 hover:bg-zinc-800 hover:text-white hover:border-zinc-600 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                      className="w-full py-2 rounded-2xl bg-zinc-800/50 text-zinc-300 border border-zinc-700/30 hover:bg-zinc-800 hover:text-white hover:border-zinc-600 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                       disabled={notifyState[member._id] === "loading" || notifyState[member._id] === "sent"}
                       title="Send an email notification"
                     >
@@ -176,7 +179,7 @@ export default function MembersPage() {
           ))}
           
           {loading && [1,2,3,4].map(i => (
-             <div key={i} className="animate-pulse bg-zinc-900/30 border border-zinc-800 rounded-3xl p-6 h-[320px]" />
+             <div key={i} className="animate-pulse bg-zinc-900/30 border border-zinc-800 rounded-3xl p-4 h-[240px]" />
           ))}
         </div>
       )}

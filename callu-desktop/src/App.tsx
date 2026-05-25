@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Minus, Square, X, Monitor } from "lucide-react";
 import Home from "./pages/Home";
 import Admin from "./pages/Admin";
@@ -220,6 +220,28 @@ const ScreenShareProvider = ({ children }: { children: React.ReactNode }) => {
 };
 
 // ═══════════════════════════════════════════════════════════════════
+//  Route Tracker — persists last visited route to localStorage
+// ═══════════════════════════════════════════════════════════════════
+export const LAST_ROUTE_KEY = "callu_last_route";
+
+/** Mounted inside the router; saves every dashboard/admin navigation. */
+function RouteTracker() {
+  const location = useLocation();
+  useEffect(() => {
+    const { pathname } = location;
+    // Only persist meaningful app routes — not the landing page itself
+    if (pathname.startsWith("/dashboard") || pathname.startsWith("/admin")) {
+      // Don't persist deep room routes — on reopen they'd be empty anyway
+      const routeToSave = pathname.startsWith("/dashboard/rooms")
+        ? "/dashboard/members"
+        : pathname;
+      localStorage.setItem(LAST_ROUTE_KEY, routeToSave);
+    }
+  }, [location]);
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════════════
 //  Main Application Component
 // ═══════════════════════════════════════════════════════════════════
 export default function App() {
@@ -231,6 +253,7 @@ export default function App() {
             <div className="flex flex-col h-full w-full bg-black text-white min-h-0">
               <Titlebar />
               <div className="flex-1 overflow-hidden relative min-h-0 flex flex-col">
+                <RouteTracker />
                 <Routes>
                   {/* Public route */}
                   <Route path="/" element={<Home />} />

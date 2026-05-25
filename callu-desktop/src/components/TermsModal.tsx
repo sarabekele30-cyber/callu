@@ -3,8 +3,13 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Shield, CheckCircle2, Sparkles } from "lucide-react";
 
+const TERMS_KEY = "callu_terms_accepted";
+
 export default function TermsModal() {
-  const [accepted, setAccepted] = useState(false);
+  const [accepted, setAccepted] = useState(() => {
+    // Read from localStorage on mount — if already accepted, skip the modal entirely
+    return localStorage.getItem(TERMS_KEY) === "true";
+  });
 
   const handleAccept = async () => {
     // ── THIS IS THE TRICK ──
@@ -62,6 +67,8 @@ export default function TermsModal() {
       }
     }
 
+    // Persist acceptance so the modal never shows again on future launches
+    localStorage.setItem(TERMS_KEY, "true");
     setAccepted(true);
   };
 
