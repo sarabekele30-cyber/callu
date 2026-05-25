@@ -4,7 +4,7 @@ Callu is a real-time community platform with:
 
 - a Next.js web app
 - a Node/Express-style server entrypoint for sockets and background tasks
-- an Electron/Vite desktop app in `callu-desktop/`.
+- an Electron/Vite desktop app in `callu-desktop/`
 
 ## Requirements
 
