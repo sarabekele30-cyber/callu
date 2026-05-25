@@ -1,0 +1,102 @@
+name: PR title and description checks
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  validate-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR metadata
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const title = (pr.title || '').trim();
+            const body = pr.body || '';
+            const errors = [];
+
+            const titlePattern = /^(feat|fix|docs|refactor|test|chore|ci|perf|build|revert)(\([a-z0-9._-]+\))?: [^\r\n]{5,100}$/i;
+            if (!titlePattern.test(title)) {
+              errors.push(
+                'Title must use `type(scope): summary` with a type such as `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `ci`, `perf`, `build`, or `revert`.'
+              );
+            }
+
+            function sectionContent(name) {
+              const lines = body.split(/\r?\n/);
+              const heading = `## ${name}`.toLowerCase();
+              const collected = [];
+              let capturing = false;
+
+              for (const line of lines) {
+                const trimmed = line.trim().toLowerCase();
+                if (trimmed === heading) {
+                  capturing = true;
+                  continue;
+                }
+
+                if (capturing && trimmed.startsWith('## ')) {
+                  break;
+                }
+
+                if (capturing) {
+                  collected.push(line);
+                }
+              }
+
+              return collected.join('\n').trim();
+            }
+
+            for (const sectionName of ['Summary', 'Related issue', 'Changes', 'Testing', 'Checklist']) {
+              if (!sectionContent(sectionName)) {
+                errors.push(`Missing required \`${sectionName}\` section in the PR body.`);
+              }
+            }
+
+            if (!/Fixes\s+#\d+/i.test(body)) {
+              errors.push('Add `Fixes #123` in the PR body so the related issue is linked.');
+            }
+
+            const checklist = sectionContent('Checklist');
+            if (checklist && !/^- \[[ xX]\]/m.test(checklist)) {
+              errors.push('The `Checklist` section must include at least one checkbox item.');
+            }
+
+            if (errors.length > 0) {
+              const comment = [
+                '❌ PR validation failed.',
+                '',
+                'Please fix the following before merging:',
+                ...errors.map((error) => `- ${error}`),
+              ].join('\n');
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body: comment,
+              });
+
+              core.setFailed(errors.join('\n'));
+              return;
+            }
+
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              event: 'APPROVE',
+              body: '✅ PR title, structure, and issue link validated.',
+            });
